@@ -65,6 +65,11 @@ public sealed class WindowsContextMenuService
                 Quote(fullPath),
                 RegistryValueKind.String);
 
+            baseKey.SetValue(
+                "Position",
+                "Top",
+                RegistryValueKind.String);
+
             using var commandKey = Registry.CurrentUser.CreateSubKey(
                 CommandKeyPath,
                 writable: true);
