@@ -1,4 +1,4 @@
-# Agent Atlas v1.0
+# Agent Atlas v1.1
 
 Agent Windows autonome de validation, installation et restauration d’Atlas Drop.
 
@@ -6,7 +6,11 @@ Agent Windows autonome de validation, installation et restauration d’Atlas Dro
 
 Double-cliquer une seule fois sur `INSTALLER-AGENT-ATLAS.cmd`.
 
+Puis double-cliquer une seule fois sur `CONNECTER-GITHUB-AGENT-ATLAS.cmd` et valider la connexion dans le navigateur.
+
 L’agent est ensuite lancé automatiquement à chaque ouverture de session et surveille `%LOCALAPPDATA%\AtlasAgent\Inbox`.
+
+Toutes les cinq minutes, il verifie aussi la branche `main` du depot prive `fchelli94410/agent-atlas`. Une nouvelle version est telechargee, controlee, compilee, testee puis installee avec restauration automatique en cas d'echec.
 
 ## Création d’un paquet
 
@@ -26,4 +30,4 @@ Copier le ZIP et son manifeste dans l’Inbox. L’agent réalise le reste autom
 
 ## État de validation
 
-Le code et les contrôles statiques sont livrés. Le comportement Windows réel, la tâche planifiée et le rollback devront être validés sur Windows ; ce contrôle est automatisé par `TEST-AUTOMATIQUE-AGENT-ATLAS.cmd` et ne demande aucune manipulation pendant son exécution.
+Le code et les contrôles statiques sont livrés. Le comportement Windows réel, la tâche planifiée, la connexion GitHub et le rollback devront être validés sur Windows.
