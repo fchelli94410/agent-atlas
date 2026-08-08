@@ -2,14 +2,26 @@ using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Threading;
+using AtlasDrop.Analysis.Classification;
+using AtlasDrop.Analysis.Companies;
+using AtlasDrop.Analysis.Dates;
+using AtlasDrop.Analysis.Invoices;
+using AtlasDrop.Analysis.Naming;
 using AtlasDrop.Analysis.Office;
 using AtlasDrop.Analysis.Pdf;
+using AtlasDrop.Analysis.Places;
 using AtlasDrop.Analysis.Text;
 using AtlasDrop.Core.Analysis;
+using AtlasDrop.Core.Naming;
+using AtlasDrop.Core.Suggestions;
+using AtlasDrop.Infrastructure.FileSystem;
 using AtlasDrop.Infrastructure.Notifications;
+using AtlasDrop.Search.Normalization;
+using AtlasDrop.Search.Suggestions;
 
 namespace AtlasDrop.App;
 
@@ -19,13 +31,25 @@ public partial class MainWindow : Window
     private readonly WindowsUserFeedbackService _feedback = new();
     private readonly DispatcherTimer _closeTimer = new() { Interval = TimeSpan.FromSeconds(2) };
     private readonly DispatcherTimer _indexRefreshTimer = new() { Interval = TimeSpan.FromSeconds(3) };
+    private readonly DocumentClassificationService _classificationService = new(new InvoiceDetectionService());
+    private readonly CompanyDetectionService _companyDetection = new();
+    private readonly PlaceDetectionService _placeDetection = new();
+    private readonly DateDetectionService _dateDetection = new();
+    private readonly InvoiceDetectionService _invoiceDetection = new();
+    private readonly FileRenameSuggestionService _renameService = new();
+    private readonly HighConfidenceAutoRenamePolicy _autoRenamePolicy = new();
+    private readonly WindowsFileNamePolicy _fileNamePolicy = new();
+    private readonly FolderScoringService _folderScoring = new(new TextNormalizer(), MaxDepth);
     private readonly string _oneDriveRoot;
     private readonly string _stateDirectory;
     private List<FolderEntry> _folders = new();
+    private List<SuggestionOption> _suggestions = new();
     private Dictionary<string, int> _learning = new(StringComparer.OrdinalIgnoreCase);
     private string? _activePath;
     private string? _proposedFolder;
     private string? _manualFolder;
+    private AnalysisSnapshot? _analysis;
+    private PendingMove? _pendingMove;
     private bool _busy;
     private FileSystemWatcher? _indexWatcher;
 
@@ -46,13 +70,21 @@ public partial class MainWindow : Window
         };
         StartIndexWatcher();
         Loaded += (_, _) => PositionTopRight();
-        Closing += (_, e) => { e.Cancel = true; Hide(); ResetOperation(); };
+        Closing += (_, e) =>
+        {
+            e.Cancel = true;
+            if (_pendingMove is not null)
+            {
+                StatusText.Text = "Réponds à la question de conformité avant de fermer.";
+                Activate();
+                return;
+            }
+            Hide();
+            ResetOperation();
+        };
     }
 
-    public void SignalMiddleClickDetected()
-    {
-        StatusText.Text = "Clic détecté — analyse en cours…";
-    }
+    public void SignalMiddleClickDetected() => StatusText.Text = "Clic détecté — analyse en cours…";
 
     public async void ActivateFile(string path)
     {
@@ -62,30 +94,42 @@ public partial class MainWindow : Window
 
         _busy = true;
         _activePath = fullPath;
+        _pendingMove = null;
         ItemNameText.Text = Path.GetFileName(fullPath);
         ManualPanel.Visibility = Visibility.Collapsed;
+        PostMovePanel.Visibility = Visibility.Collapsed;
         DecisionButtons.Visibility = Visibility.Visible;
         MoveHereButton.Visibility = Visibility.Collapsed;
         StatusText.Visibility = Visibility.Visible;
         StatusText.Text = "Analyse en cours…";
         Show(); Activate(); PositionTopRight();
 
-        var tokens = await AnalyzeItemAsync(fullPath);
-        _proposedFolder = ChooseSafeDestination(tokens);
-        ProposedPathText.Text = _proposedFolder;
-        ConfidenceText.Text = BuildConfidenceText(tokens, _proposedFolder);
-        StatusText.Text = "Valide le dossier avant tout déplacement.";
-        OpenExplorer(_proposedFolder);
+        _analysis = await AnalyzeItemAsync(fullPath);
+        _suggestions = BuildSuggestions(_analysis);
+        SuggestionList.ItemsSource = _suggestions;
+        SuggestionList.SelectedIndex = _suggestions.Count > 0 ? 0 : -1;
+        YesButton.IsEnabled = _suggestions.Count > 0;
+
+        if (_suggestions.Count == 0)
+        {
+            _proposedFolder = null;
+            ProposedPathText.Text = "Aucun dossier assez fiable";
+            ConfidenceText.Text = "Confiance inférieure à 30 % : choisis manuellement.";
+        }
+
+        PrepareRename(fullPath, _analysis, _suggestions.FirstOrDefault());
+        StatusText.Text = "Valide explicitement avant tout déplacement.";
     }
 
-    private async Task<IReadOnlyCollection<string>> AnalyzeItemAsync(string path)
+    private async Task<AnalysisSnapshot> AnalyzeItemAsync(string path)
     {
-        var text = new List<string> { Path.GetFileNameWithoutExtension(path) };
+        var fragments = new List<string> { Path.GetFileNameWithoutExtension(path) };
+        var extractedText = string.Empty;
         if (Directory.Exists(path))
         {
             try
             {
-                text.AddRange(Directory.EnumerateFileSystemEntries(path)
+                fragments.AddRange(Directory.EnumerateFileSystemEntries(path)
                     .Take(300).Select(Path.GetFileName).Where(x => !string.IsNullOrWhiteSpace(x))!);
             }
             catch { }
@@ -104,39 +148,127 @@ public partial class MainWindow : Window
                     ".pdf" => await new PdfTextExtractor().ExtractAsync(path),
                     _ => null
                 };
-                if (!string.IsNullOrWhiteSpace(result?.Text)) text.Add(result.Text[..Math.Min(result.Text.Length, 100_000)]);
+                if (!string.IsNullOrWhiteSpace(result?.Text))
+                {
+                    extractedText = result.Text[..Math.Min(result.Text.Length, 100_000)];
+                    fragments.Add(extractedText);
+                }
             }
             catch { }
         }
-        return Tokenize(string.Join(' ', text));
+
+        var combined = string.Join(' ', fragments);
+        var classification = _classificationService.Classify(Path.GetFileName(path), extractedText);
+        var companies = _companyDetection.Detect(combined).Select(x => x.Name).ToList();
+        var inferredCompany = DetectBusinessPhrase(combined);
+        if (!string.IsNullOrWhiteSpace(inferredCompany) && !companies.Contains(inferredCompany, StringComparer.OrdinalIgnoreCase))
+            companies.Add(inferredCompany);
+        var places = _placeDetection.Detect(combined)
+            .Select(x => CleanDetectedPlace(x.Name, companies))
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        var dates = _dateDetection.Detect(combined);
+        var tokens = Tokenize(combined).Where(x => !x.Equals("document", StringComparison.OrdinalIgnoreCase)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var years = dates.Where(x => x.Value is not null).Select(x => x.Value!.Value.Year).Distinct().ToArray();
+        var fallbackLabel = classification.Type != DocumentType.Unknown ? classification.Type.ToString() : "Document";
+        if (fallbackLabel != "Document") tokens.Add(fallbackLabel);
+
+        return new AnalysisSnapshot(combined, tokens, classification, places, companies, dates, years);
     }
 
-    private string ChooseSafeDestination(IReadOnlyCollection<string> tokens)
+    private List<SuggestionOption> BuildSuggestions(AnalysisSnapshot analysis)
     {
-        if (_folders.Count == 0) return _oneDriveRoot;
-        var ranked = _folders.Select(f =>
+        var context = new FileSuggestionContext(
+            Path.GetFileName(_activePath ?? string.Empty),
+            analysis.Text,
+            analysis.Classification.Type,
+            analysis.Tokens.ToArray(),
+            analysis.Places,
+            analysis.Companies,
+            analysis.Years,
+            string.Join('|', analysis.Tokens.Take(8)));
+
+        return _folders
+            .Select(folder =>
+            {
+                var relative = Path.GetRelativePath(_oneDriveRoot, folder.Path);
+                var candidate = new FolderCandidate(
+                    folder.Path,
+                    Path.GetFileName(folder.Path),
+                    folder.Path,
+                    folder.Depth,
+                    IsExcludedFolder(relative),
+                    IsGenericFolder(Path.GetFileName(folder.Path)) ? 0.20 : 0.70,
+                    TryGetLastWrite(folder.Path),
+                    0,
+                    folder.Tokens.ToArray(),
+                    _placeDetection.Detect(relative).Select(x => x.Name).ToArray(),
+                    _companyDetection.Detect(relative).Select(x => x.Name).ToArray(),
+                    folder.Tokens.Select(x => int.TryParse(x, out var year) ? year : 0).Where(x => x is >= 1900 and <= 2100).ToArray(),
+                    new Dictionary<DocumentType, int>());
+                var scored = _folderScoring.Score(candidate, context);
+                var learned = analysis.Tokens.Sum(token => _learning.TryGetValue(LearningKey(token, folder.Path), out var value) ? value : 0);
+                var score = Math.Clamp(scored.Score + learned * 0.02, 0d, 1d);
+                var reason = scored.Reasons.FirstOrDefault() ?? "correspondance du dossier";
+                return new SuggestionOption(folder.Path, score, reason);
+            })
+            .Where(x => x.Score >= 0.30)
+            .GroupBy(x => x.FullPath, StringComparer.OrdinalIgnoreCase)
+            .Select(g => g.OrderByDescending(x => x.Score).First())
+            .OrderByDescending(x => x.Score)
+            .ThenBy(x => x.FullPath, StringComparer.OrdinalIgnoreCase)
+            .Take(3)
+            .ToList();
+    }
+
+    private void OnSuggestionSelected(object sender, SelectionChangedEventArgs e)
+    {
+        if (SuggestionList.SelectedItem is not SuggestionOption option) return;
+        _proposedFolder = option.FullPath;
+        ProposedPathText.Text = option.FullPath;
+        ConfidenceText.Text = $"Confiance {option.Score:P0} — {option.Reason}";
+        YesButton.IsEnabled = true;
+        OpenExplorer(option.FullPath);
+        if (_analysis is not null && _activePath is not null) PrepareRename(_activePath, _analysis, option);
+    }
+
+    private void PrepareRename(string path, AnalysisSnapshot analysis, SuggestionOption? option)
+    {
+        if (Directory.Exists(path))
         {
-            var overlap = f.Tokens.Count(t => tokens.Contains(t));
-            var learned = tokens.Sum(token => _learning.TryGetValue(LearningKey(token, f.Path), out var value) ? value : 0);
-            return new { Folder = f, Score = overlap * 10 + learned * 6 + Math.Min(f.Depth, 3) };
-        }).OrderByDescending(x => x.Score).ThenByDescending(x => x.Folder.Depth).ToArray();
+            RenamePanel.Visibility = Visibility.Collapsed;
+            AutoRenameCheckBox.IsChecked = false;
+            return;
+        }
 
-        var best = ranked[0];
-        if (best.Score < 10) return _oneDriveRoot;
-        if (ranked.Length > 1 && best.Score - ranked[1].Score < 7)
-            return Directory.GetParent(best.Folder.Path)?.FullName ?? _oneDriveRoot;
-        return best.Folder.Path;
+        RenamePanel.Visibility = Visibility.Visible;
+        var date = analysis.Dates.FirstOrDefault();
+        var exactDate = date?.Precision == DetectedDatePrecision.Day ? date.Value : null;
+        var year = date?.Value?.Year;
+        var month = date?.Precision is DetectedDatePrecision.Month or DetectedDatePrecision.Day ? date.Value?.Month : null;
+        var invoice = _invoiceDetection.Detect(analysis.Text);
+        var context = new FileRenameContext(
+            Path.GetFileName(path),
+            analysis.Classification.Type,
+            exactDate,
+            year,
+            month,
+            analysis.Places.FirstOrDefault(),
+            analysis.Companies.FirstOrDefault(),
+            null,
+            invoice.InvoiceNumber);
+        var suggestion = _renameService.Suggest(context);
+        var confidence = new SuggestionConfidenceService().Evaluate(option?.Score ?? 0d);
+        var decision = _autoRenamePolicy.Decide(suggestion, confidence, userEnabledAutoRename: true);
+        RenameTextBox.Text = suggestion.ProposedFileName;
+        AutoRenameCheckBox.IsChecked = decision.ShouldApply;
+        AutoRenameStatusText.Text = suggestion.Changed
+            ? $"Proposition modifiable — {decision.Reason}"
+            : "Nom actuel conservé : aucune amélioration fiable.";
     }
 
-    private string BuildConfidenceText(IReadOnlyCollection<string> tokens, string folder)
-    {
-        var entry = _folders.FirstOrDefault(x => string.Equals(x.Path, folder, StringComparison.OrdinalIgnoreCase));
-        var count = entry?.Tokens.Count(tokens.Contains) ?? 0;
-        return folder == _oneDriveRoot ? "Confiance faible : racine OneDrive proposée." :
-            count >= 2 ? "Confiance élevée" : "Confiance prudente : dossier parent sûr";
-    }
-
-    private async void OnYes(object sender, RoutedEventArgs e) => await MoveAsync(_proposedFolder, true);
+    private async void OnYes(object sender, RoutedEventArgs e) => await MoveAsync(_proposedFolder);
 
     private void OnNo(object sender, RoutedEventArgs e)
     {
@@ -145,7 +277,7 @@ public partial class MainWindow : Window
         var parent = Directory.GetParent(_proposedFolder)?.FullName;
         _proposedFolder = !string.IsNullOrWhiteSpace(parent) && IsUnderRoot(parent) ? parent : _oneDriveRoot;
         ProposedPathText.Text = _proposedFolder;
-        ConfidenceText.Text = "Proposition remontée d’un niveau.";
+        ConfidenceText.Text = "Proposition remontée d’un niveau. Aucun déplacement effectué.";
         OpenExplorer(_proposedFolder);
     }
 
@@ -154,9 +286,8 @@ public partial class MainWindow : Window
         BuildFolderTree();
         ManualPanel.Visibility = Visibility.Visible;
         DecisionButtons.Visibility = Visibility.Collapsed;
-        StatusText.Visibility = Visibility.Collapsed;
         MoveHereButton.Visibility = Visibility.Visible;
-        Height = 650;
+        Height = 780;
     }
 
     private void OnFolderSelected(object sender, RoutedPropertyChangedEventArgs<object> e)
@@ -164,17 +295,20 @@ public partial class MainWindow : Window
         if (e.NewValue is not TreeViewItem item || item.Tag is not string path) return;
         _manualFolder = path;
         ProposedPathText.Text = path;
+        ConfidenceText.Text = "Dossier choisi manuellement — clique DÉPLACER ICI pour confirmer.";
         OpenExplorer(path);
     }
 
-    private async void OnMoveHere(object sender, RoutedEventArgs e) => await MoveAsync(_manualFolder, true);
+    private async void OnMoveHere(object sender, RoutedEventArgs e) => await MoveAsync(_manualFolder);
 
     private void OnCancel(object sender, RoutedEventArgs e)
     {
-        Hide(); ResetOperation();
+        if (_pendingMove is not null) return;
+        Hide();
+        ResetOperation();
     }
 
-    private async Task MoveAsync(string? destination, bool learn)
+    private async Task MoveAsync(string? destination)
     {
         if (string.IsNullOrWhiteSpace(_activePath) || string.IsNullOrWhiteSpace(destination)) return;
         if (!IsUnderRoot(destination) || !Directory.Exists(destination)) { StatusText.Text = "Destination OneDrive invalide."; return; }
@@ -190,7 +324,17 @@ public partial class MainWindow : Window
         {
             var source = _activePath;
             var sourceIsDirectory = Directory.Exists(source);
-            var requestedTarget = Path.Combine(destination, Path.GetFileName(source));
+            var targetName = Path.GetFileName(source);
+            if (!sourceIsDirectory && AutoRenameCheckBox.IsChecked == true && !string.IsNullOrWhiteSpace(RenameTextBox.Text))
+            {
+                var edited = RenameTextBox.Text.Trim();
+                if (string.IsNullOrWhiteSpace(Path.GetExtension(edited))) edited += Path.GetExtension(source);
+                var safeName = _fileNamePolicy.Sanitize(edited);
+                if (!safeName.IsValid) { StatusText.Text = "Le nom proposé est invalide sous Windows."; return; }
+                targetName = safeName.SafeFileName;
+            }
+
+            var requestedTarget = Path.Combine(destination, targetName);
             var overwrite = false;
             string target;
             if (!sourceIsDirectory && File.Exists(requestedTarget))
@@ -200,12 +344,12 @@ public partial class MainWindow : Window
                     "Doublon détecté", MessageBoxButton.YesNoCancel, MessageBoxImage.Warning, MessageBoxResult.No);
                 if (choice == MessageBoxResult.Cancel) return;
                 overwrite = choice == MessageBoxResult.Yes;
-                target = overwrite ? requestedTarget : AvailableTarget(destination, Path.GetFileName(source), false);
+                target = overwrite ? requestedTarget : AvailableTarget(destination, targetName, false);
             }
-            else target = AvailableTarget(destination, Path.GetFileName(source), sourceIsDirectory);
+            else target = AvailableTarget(destination, targetName, sourceIsDirectory);
+
             var originalCreation = File.Exists(source) ? File.GetCreationTimeUtc(source) : DateTime.MinValue;
             var originalWrite = File.Exists(source) ? File.GetLastWriteTimeUtc(source) : DateTime.MinValue;
-            StatusText.Visibility = Visibility.Visible;
             StatusText.Text = "Déplacement sécurisé…";
             IsEnabled = false;
             await Task.Run(() =>
@@ -214,19 +358,81 @@ public partial class MainWindow : Window
                 else File.Move(source, target, overwrite);
             });
             if (!File.Exists(target) && !Directory.Exists(target)) throw new IOException("Vérification du déplacement impossible.");
-            if (File.Exists(target)) { File.SetCreationTimeUtc(target, originalCreation); File.SetLastWriteTimeUtc(target, originalWrite); }
-            if (learn) RecordLearning(destination, accepted: true);
+            if (File.Exists(target))
+            {
+                File.SetCreationTimeUtc(target, originalCreation);
+                File.SetLastWriteTimeUtc(target, originalWrite);
+            }
+
+            _pendingMove = new PendingMove(source, target, destination, sourceIsDirectory);
+            _activePath = target;
+            SaveLastMove(_pendingMove, "PENDING_CONFIRMATION");
             _feedback.PlaySuccessSound();
-            StatusText.Text = "Classement réussi";
             IsEnabled = true;
-            if (File.Exists(target)) _closeTimer.Start();
-            else { _activePath = null; _busy = false; OpenExplorer(target); }
+            ManualPanel.Visibility = Visibility.Collapsed;
+            DecisionButtons.Visibility = Visibility.Collapsed;
+            MoveHereButton.Visibility = Visibility.Collapsed;
+            RenamePanel.Visibility = Visibility.Collapsed;
+            PostMovePanel.Visibility = Visibility.Visible;
+            StatusText.Text = "Déplacement vérifié. Confirme maintenant le classement.";
         }
         catch (Exception ex)
         {
             IsEnabled = true;
             StatusText.Text = "Déplacement impossible : " + ex.Message;
         }
+    }
+
+    private void OnClassificationConfirmed(object sender, RoutedEventArgs e)
+    {
+        if (_pendingMove is null) return;
+        RecordLearning(_pendingMove.Destination, accepted: true);
+        SaveLastMove(_pendingMove, "CONFIRMED");
+        _pendingMove = null;
+        PostMovePanel.Visibility = Visibility.Collapsed;
+        StatusText.Text = "Classement confirmé et apprentissage enregistré.";
+        _closeTimer.Start();
+    }
+
+    private async void OnClassificationRejected(object sender, RoutedEventArgs e)
+    {
+        if (_pendingMove is null) return;
+        var move = _pendingMove;
+        IsEnabled = false;
+        StatusText.Text = "Restauration du fichier avant correction…";
+        try
+        {
+            var restored = await Task.Run(() => RestoreMove(move));
+            _pendingMove = null;
+            _activePath = restored;
+            SaveLastMove(move, "REJECTED_AND_RESTORED");
+            IsEnabled = true;
+            PostMovePanel.Visibility = Visibility.Collapsed;
+            RenamePanel.Visibility = Directory.Exists(restored) ? Visibility.Collapsed : Visibility.Visible;
+            BuildFolderTree();
+            ManualPanel.Visibility = Visibility.Visible;
+            MoveHereButton.Visibility = Visibility.Visible;
+            StatusText.Text = "Classement annulé et source restaurée. Choisis le bon dossier.";
+            OpenExplorer(Path.GetDirectoryName(restored) ?? _oneDriveRoot);
+        }
+        catch (Exception ex)
+        {
+            IsEnabled = true;
+            StatusText.Text = "Restauration impossible : " + ex.Message + ". Aucun apprentissage enregistré.";
+        }
+    }
+
+    private static string RestoreMove(PendingMove move)
+    {
+        if (!File.Exists(move.Target) && !Directory.Exists(move.Target)) throw new IOException("Élément déplacé introuvable.");
+        var sourceDirectory = Path.GetDirectoryName(move.Source) ?? throw new IOException("Dossier source invalide.");
+        Directory.CreateDirectory(sourceDirectory);
+        var restored = (!File.Exists(move.Source) && !Directory.Exists(move.Source))
+            ? move.Source
+            : AvailableTarget(sourceDirectory, Path.GetFileName(move.Source), move.IsDirectory);
+        if (move.IsDirectory) Directory.Move(move.Target, restored);
+        else File.Move(move.Target, restored);
+        return restored;
     }
 
     private void BuildFolderTree()
@@ -248,7 +454,7 @@ public partial class MainWindow : Window
 
     private List<FolderEntry> LoadOrBuildIndex()
     {
-        var cache = Path.Combine(_stateDirectory, "folder-index-v107.json");
+        var cache = Path.Combine(_stateDirectory, "folder-index-v108.json");
         try
         {
             if (File.Exists(cache) && DateTime.UtcNow - File.GetLastWriteTimeUtc(cache) < TimeSpan.FromHours(12))
@@ -288,7 +494,7 @@ public partial class MainWindow : Window
 
     private void SaveIndex(List<FolderEntry> folders)
     {
-        try { File.WriteAllText(Path.Combine(_stateDirectory, "folder-index-v107.json"), JsonSerializer.Serialize(folders)); } catch { }
+        try { File.WriteAllText(Path.Combine(_stateDirectory, "folder-index-v108.json"), JsonSerializer.Serialize(folders)); } catch { }
     }
 
     private void StartIndexWatcher()
@@ -313,7 +519,7 @@ public partial class MainWindow : Window
     {
         try
         {
-            var file = Path.Combine(_stateDirectory, "learning-v107.json");
+            var file = Path.Combine(_stateDirectory, "learning-v108.json");
             if (File.Exists(file)) _learning = JsonSerializer.Deserialize<Dictionary<string, int>>(File.ReadAllText(file)) ?? _learning;
         }
         catch { }
@@ -321,17 +527,30 @@ public partial class MainWindow : Window
 
     private void RecordLearning(string folder, bool accepted)
     {
-        if (_activePath is null) return;
-        foreach (var token in Tokenize(Path.GetFileNameWithoutExtension(_activePath)).Take(12))
+        var tokens = _analysis?.Tokens ?? Tokenize(Path.GetFileNameWithoutExtension(_activePath ?? string.Empty));
+        foreach (var token in tokens.Take(16))
         {
             var key = LearningKey(token, folder);
             _learning.TryGetValue(key, out var score); _learning[key] = Math.Clamp(score + (accepted ? 1 : -1), -5, 20);
         }
-        try { File.WriteAllText(Path.Combine(_stateDirectory, "learning-v107.json"), JsonSerializer.Serialize(_learning)); } catch { }
+        try { File.WriteAllText(Path.Combine(_stateDirectory, "learning-v108.json"), JsonSerializer.Serialize(_learning)); } catch { }
+    }
+
+    private void SaveLastMove(PendingMove move, string status)
+    {
+        try
+        {
+            var audit = new { move.Source, move.Target, move.Destination, Status = status, TimestampUtc = DateTime.UtcNow };
+            File.WriteAllText(Path.Combine(_stateDirectory, "last-move-v108.json"), JsonSerializer.Serialize(audit));
+        }
+        catch { }
     }
 
     private static string LearningKey(string token, string folder) => token.ToLowerInvariant() + "=>" + folder.ToLowerInvariant();
-    private static HashSet<string> Tokenize(string text) => text.ToLowerInvariant().Split(new[] { ' ', '\\', '/', '-', '_', '.', '(', ')', '[', ']', '&', ',', ';', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries).Where(x => x.Length >= 3).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+    private static HashSet<string> Tokenize(string text) => text.ToLowerInvariant()
+        .Split(new[] { ' ', '\\', '/', '-', '_', '.', '(', ')', '[', ']', '&', ',', ';', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
+        .Where(x => x.Length >= 3).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
     private string FindOneDriveRoot()
     {
@@ -348,6 +567,36 @@ public partial class MainWindow : Window
         var root = Path.GetFullPath(_oneDriveRoot).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
         var candidate = Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
         return candidate.StartsWith(root, StringComparison.OrdinalIgnoreCase) || string.Equals(candidate, root, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsGenericFolder(string name) => name.Trim().ToLowerInvariant() is "divers" or "documents" or "fichiers" or "temp" or "tmp" or "autres";
+
+    private static bool IsExcludedFolder(string relativePath)
+    {
+        var excluded = new HashSet<string>(new[] { "Bureau", "Desktop", "Documents", "Images", "Pictures", "99 - Archives", "$RECYCLE.BIN", "Temp", "Cache" }, StringComparer.OrdinalIgnoreCase);
+        return relativePath.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Any(excluded.Contains);
+    }
+
+    private static DateTime? TryGetLastWrite(string path)
+    {
+        try { return Directory.GetLastWriteTimeUtc(path); } catch { return null; }
+    }
+
+    private static string CleanDetectedPlace(string place, IReadOnlyCollection<string> companies)
+    {
+        var cleaned = place.Trim();
+        foreach (var company in companies.Where(x => !string.IsNullOrWhiteSpace(x)).OrderByDescending(x => x.Length))
+        {
+            var index = cleaned.IndexOf(company, StringComparison.OrdinalIgnoreCase);
+            if (index >= 0) cleaned = cleaned[..index].Trim(' ', '-', ',', ';');
+        }
+        return cleaned;
+    }
+
+    private static string? DetectBusinessPhrase(string text)
+    {
+        var match = Regex.Match(text, @"\b(?<company>[A-ZÀ-ÖØ-Þ][A-ZÀ-ÖØ-Þ0-9&'’.-]{1,30}(?:\s+[A-ZÀ-ÖØ-Þ][A-ZÀ-ÖØ-Þ0-9&'’.-]{1,30}){0,3}\s+(?:GESTION|INVEST|IMMOBILIER|ASSURANCES?|BANQUE))\b", RegexOptions.CultureInvariant);
+        return match.Success ? match.Groups["company"].Value.Trim() : null;
     }
 
     private static string AvailableTarget(string destination, string name, bool directory)
@@ -403,8 +652,8 @@ public partial class MainWindow : Window
                     var currentPath = (string?)window.Document?.Folder?.Self?.Path;
                     if (!string.Equals(Path.GetFullPath(currentPath ?? ""), Path.GetFullPath(folder), StringComparison.OrdinalIgnoreCase)) continue;
                     var area = SystemParameters.WorkArea;
-                    MoveWindow((IntPtr)(long)window.HWND, (int)(area.Left + area.Width * .73), (int)area.Top + 8,
-                        (int)(area.Width * .26), (int)(area.Height * .50), true);
+                    MoveWindow((IntPtr)(long)window.HWND, (int)(area.Left + area.Width * .68), (int)area.Top + 8,
+                        (int)(area.Width * .31), (int)(area.Height * .55), true);
                     break;
                 }
                 catch { }
@@ -422,17 +671,36 @@ public partial class MainWindow : Window
     private void PositionTopRight()
     {
         var area = SystemParameters.WorkArea;
-        Width = Math.Max(460, area.Width * .27); Height = Math.Max(390, area.Height * .46);
-        Left = area.Right - Width - 12; Top = area.Bottom - Height - 12;
+        Width = Math.Max(620, area.Width * .38); Height = Math.Max(560, area.Height * .78);
+        Left = area.Right - Width - 12; Top = area.Top + 8;
     }
 
     private void ResetOperation()
     {
-        _activePath = null; _proposedFolder = null; _manualFolder = null; _busy = false; Height = 430;
+        _closeTimer.Stop();
+        _activePath = null; _proposedFolder = null; _manualFolder = null; _analysis = null; _pendingMove = null; _busy = false;
+        _suggestions.Clear(); SuggestionList.ItemsSource = null; Height = 690;
         ItemNameText.Text = "En attente d’un clic molette…"; ProposedPathText.Text = "—"; ConfidenceText.Text = "";
+        RenameTextBox.Text = ""; AutoRenameStatusText.Text = ""; AutoRenameCheckBox.IsChecked = false;
+        ManualPanel.Visibility = Visibility.Collapsed; PostMovePanel.Visibility = Visibility.Collapsed;
+        DecisionButtons.Visibility = Visibility.Visible; MoveHereButton.Visibility = Visibility.Collapsed; RenamePanel.Visibility = Visibility.Visible;
+        YesButton.IsEnabled = false; IsEnabled = true;
     }
 
     public sealed record FolderEntry(string Path, int Depth, HashSet<string> Tokens);
+    public sealed record SuggestionOption(string FullPath, double Score, string Reason)
+    {
+        public string DisplayText => $"{Score:P0} — {FullPath}";
+    }
+    private sealed record AnalysisSnapshot(
+        string Text,
+        HashSet<string> Tokens,
+        DocumentClassificationResult Classification,
+        IReadOnlyList<string> Places,
+        IReadOnlyList<string> Companies,
+        IReadOnlyList<DetectedDate> Dates,
+        IReadOnlyList<int> Years);
+    private sealed record PendingMove(string Source, string Target, string Destination, bool IsDirectory);
 
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
