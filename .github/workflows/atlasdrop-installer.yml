@@ -28,7 +28,7 @@ jobs:
       - name: Test
         run: dotnet test AtlasDrop.sln -c Release --no-build --logger "trx;LogFileName=atlasdrop-tests.trx"
       - name: Publish autonomous Windows application
-        run: dotnet publish src/AtlasDrop.App/AtlasDrop.App.csproj -c Release -r win-x64 --self-contained true --no-restore -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false -o installer/publish
+        run: dotnet publish src/AtlasDrop.App/AtlasDrop.App.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false -o installer/publish
       - name: Install Inno Setup compiler
         run: choco install innosetup --no-progress -y
       - name: Build single EXE installer
