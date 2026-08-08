@@ -10,15 +10,6 @@
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
   </ItemGroup>
 
-  <!-- The v1.0.7 replaces the legacy three-card UI. Keep its historical
-       source-inspection tests in the archive, but run only the v1.0.7 UI
-       contract tests for the new workflow. -->
-  <ItemGroup>
-    <Compile Remove="App\**\*.cs" />
-    <Compile Include="App\MainWindowXamlTests.cs" />
-    <Compile Include="App\MainWindowWorkflowTests.cs" />
-  </ItemGroup>
-
   <ItemGroup>
     <ProjectReference Include="..\AtlasDrop.Core\AtlasDrop.Core.csproj" />
     <ProjectReference Include="..\AtlasDrop.Infrastructure\AtlasDrop.Infrastructure.csproj" />

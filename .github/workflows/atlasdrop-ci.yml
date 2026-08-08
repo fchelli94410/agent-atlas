@@ -1,0 +1,28 @@
+name: Atlas Drop Windows CI
+
+on:
+  push:
+    branches:
+      - agent/finalisation-atlas-drop
+  pull_request:
+    paths:
+      - 'AtlasDrop/**'
+      - '.github/workflows/atlasdrop-ci.yml'
+
+jobs:
+  build-test:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: AtlasDrop/AtlasDrop-Sprint01
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Restore
+        run: dotnet restore AtlasDrop.sln --disable-parallel
+      - name: Build
+        run: dotnet build AtlasDrop.sln -c Release --no-restore --warnaserror
+      - name: Test
+        run: dotnet test AtlasDrop.sln -c Release --no-build --logger "trx;LogFileName=atlasdrop-tests.trx"
