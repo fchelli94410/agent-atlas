@@ -2,11 +2,11 @@
 
 Agent Windows autonome de validation, installation et restauration d’Atlas Drop.
 
-## Installation
+## Installation recommandée
 
-Double-cliquer une seule fois sur `INSTALLER-AGENT-ATLAS.cmd`.
+Double-cliquer une seule fois sur `INSTALLER-ET-CONNECTER-AGENT-ATLAS.cmd`, puis valider la connexion dans le navigateur.
 
-Puis double-cliquer une seule fois sur `CONNECTER-GITHUB-AGENT-ATLAS.cmd` et valider la connexion dans le navigateur.
+Les fichiers d'installation et de connexion séparés restent disponibles uniquement pour le diagnostic.
 
 L’agent est ensuite lancé automatiquement à chaque ouverture de session et surveille `%LOCALAPPDATA%\AtlasAgent\Inbox`.
 
