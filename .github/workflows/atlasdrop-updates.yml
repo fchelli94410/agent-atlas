@@ -1,0 +1,70 @@
+name: Publish Atlas Drop update channel
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'AtlasDrop/**'
+      - '.github/workflows/atlasdrop-updates.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: atlas-drop-updates
+  cancel-in-progress: false
+
+jobs:
+  build-and-publish:
+    runs-on: windows-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    defaults:
+      run:
+        working-directory: AtlasDrop/AtlasDrop-Sprint01
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Restore and test
+        run: |
+          dotnet restore AtlasDrop.sln --disable-parallel
+          dotnet build AtlasDrop.sln -c Release --no-restore --warnaserror
+          dotnet test AtlasDrop.sln -c Release --no-build
+      - name: Publish autonomous application
+        run: dotnet publish src/AtlasDrop.App/AtlasDrop.App.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false -o installer/publish
+      - name: Build installer
+        run: |
+          choco install innosetup --no-progress -y
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=1.0.9" "installer\AtlasDrop.iss"
+      - name: Create signed update manifest
+        shell: powershell
+        run: |
+          $site = Join-Path $PWD 'update-site'
+          New-Item -ItemType Directory -Path $site -Force | Out-Null
+          $installer = Resolve-Path 'installer\output\Installer-Atlas-Drop.exe'
+          Copy-Item -LiteralPath $installer -Destination (Join-Path $site 'Installer-Atlas-Drop.exe')
+          $hash = (Get-FileHash -LiteralPath $installer -Algorithm SHA256).Hash.ToLowerInvariant()
+          [ordered]@{
+            schemaVersion = 1
+            product = 'AtlasDrop'
+            version = '1.0.9'
+            sha256 = $hash
+            file = 'Installer-Atlas-Drop.exe'
+            publishedUtc = [DateTime]::UtcNow.ToString('o')
+          } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $site 'manifest.json') -Encoding UTF8
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: AtlasDrop/AtlasDrop-Sprint01/update-site
+      - name: Deploy public update files
+        id: deployment
+        uses: actions/deploy-pages@v4
