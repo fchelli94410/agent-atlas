@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <UseWPF>true</UseWPF>
+    <AssemblyName>AtlasDrop.App</AssemblyName>
+    <RootNamespace>AtlasDrop.App</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AtlasDrop.Core\AtlasDrop.Core.csproj" />
+    <ProjectReference Include="..\AtlasDrop.Infrastructure\AtlasDrop.Infrastructure.csproj" />
+    <ProjectReference Include="..\AtlasDrop.Search\AtlasDrop.Search.csproj" />
+    <ProjectReference Include="..\AtlasDrop.Analysis\AtlasDrop.Analysis.csproj" />
+    <ProjectReference Include="..\AtlasDrop.FileOperations\AtlasDrop.FileOperations.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="appsettings.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+</Project>

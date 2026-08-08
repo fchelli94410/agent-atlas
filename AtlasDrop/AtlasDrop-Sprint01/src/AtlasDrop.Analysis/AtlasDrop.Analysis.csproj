@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>AtlasDrop.Analysis</AssemblyName>
+    <RootNamespace>AtlasDrop.Analysis</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AtlasDrop.Core\AtlasDrop.Core.csproj" />
+    <ProjectReference Include="..\AtlasDrop.Infrastructure\AtlasDrop.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="DocumentFormat.OpenXml" Version="3.1.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="UglyToad.PdfPig" Version="1.7.0-custom-5" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Tesseract" Version="5.2.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MsgReader" Version="6.1.0" />
+  </ItemGroup>
+</Project>
+
+
+
+

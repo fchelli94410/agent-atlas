@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>AtlasDrop.Core</AssemblyName>
+    <RootNamespace>AtlasDrop.Core</RootNamespace>
+  </PropertyGroup>
+</Project>

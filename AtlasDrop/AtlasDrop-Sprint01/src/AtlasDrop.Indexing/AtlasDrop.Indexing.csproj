@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>AtlasDrop.Indexing</AssemblyName>
+    <RootNamespace>AtlasDrop.Indexing</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AtlasDrop.Core\AtlasDrop.Core.csproj" />
+  </ItemGroup>
+</Project>
