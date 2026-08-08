@@ -42,7 +42,7 @@ jobs:
       - name: Build installer
         run: |
           choco install innosetup --no-progress -y
-          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=1.0.9" "installer\AtlasDrop.iss"
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=1.0.12" "installer\AtlasDrop.iss"
       - name: Create signed update manifest
         shell: powershell
         run: |
@@ -54,7 +54,7 @@ jobs:
           [ordered]@{
             schemaVersion = 1
             product = 'AtlasDrop'
-            version = '1.0.9'
+            version = '1.0.12'
             sha256 = $hash
             file = 'Installer-Atlas-Drop.exe'
             publishedUtc = [DateTime]::UtcNow.ToString('o')
