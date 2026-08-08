@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - agent/installer-windows-autonome
+      - agent/mise-a-jour-automatique-fiable
   pull_request:
     paths:
       - 'AtlasDrop/**'
@@ -33,7 +34,34 @@ jobs:
         run: choco install innosetup --no-progress -y
       - name: Build single EXE installer
         run: '& "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=1.0.9" "installer\AtlasDrop.iss"'
-      - name: Silent install smoke test
+      - name: Verify public update channel
+        shell: powershell
+        run: |
+          $base = 'https://atlas-drop-updates.chellifranck.chatgpt.site/'
+          $manifest = Invoke-RestMethod -Uri ($base + 'manifest.json')
+          if ($manifest.product -ne 'Atlas Drop') { throw 'Wrong update product.' }
+          if ($manifest.platform -ne 'windows-x64') { throw 'Wrong update platform.' }
+          if ($manifest.version -ne '1.0.9') { throw 'Wrong update version.' }
+          $download = Join-Path $env:RUNNER_TEMP 'atlasdrop-public-download.exe'
+          $output = [System.IO.File]::Open($download, [System.IO.FileMode]::Create)
+          try {
+            foreach ($part in $manifest.parts) {
+              $partPath = Join-Path $env:RUNNER_TEMP ([System.IO.Path]::GetRandomFileName())
+              Invoke-WebRequest -Uri ($base + $part.file) -OutFile $partPath
+              $partHash = (Get-FileHash -LiteralPath $partPath -Algorithm SHA256).Hash.ToLowerInvariant()
+              if ($partHash -ne $part.sha256) { throw "Corrupted public part: $($part.file)" }
+              $input = [System.IO.File]::OpenRead($partPath)
+              try { $input.CopyTo($output) } finally { $input.Dispose() }
+              Remove-Item -LiteralPath $partPath -Force
+            }
+          }
+          finally {
+            $output.Dispose()
+          }
+          if ((Get-Item -LiteralPath $download).Length -ne $manifest.size) { throw 'Wrong public installer size.' }
+          $fullHash = (Get-FileHash -LiteralPath $download -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($fullHash -ne $manifest.sha256) { throw 'Corrupted public installer.' }
+      - name: Silent install, update restart and uninstall
         shell: powershell
         run: |
           $installer = Resolve-Path "installer\output\Installer-Atlas-Drop.exe"
@@ -41,10 +69,18 @@ jobs:
           if ($process.ExitCode -ne 0) { throw "Installation failed: $($process.ExitCode)" }
           $app = Join-Path $env:LOCALAPPDATA 'AtlasDrop\AtlasDrop.App.exe'
           if (-not (Test-Path -LiteralPath $app)) { throw 'Installed executable missing.' }
+
           Start-Process -FilePath $app -WorkingDirectory (Split-Path $app)
           Start-Sleep -Seconds 5
           if ($null -eq (Get-Process -Name 'AtlasDrop.App' -ErrorAction SilentlyContinue)) { throw 'Atlas Drop did not stay running.' }
           Stop-Process -Name 'AtlasDrop.App' -Force
+
+          $update = Start-Process -FilePath $installer -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/CLOSEAPPLICATIONS','/UPDATE=1' -Wait -PassThru
+          if ($update.ExitCode -ne 0) { throw "Update failed: $($update.ExitCode)" }
+          Start-Sleep -Seconds 5
+          if ($null -eq (Get-Process -Name 'AtlasDrop.App' -ErrorAction SilentlyContinue)) { throw 'Updated Atlas Drop did not restart.' }
+          Stop-Process -Name 'AtlasDrop.App' -Force
+
           $uninstaller = Join-Path $env:LOCALAPPDATA 'AtlasDrop\unins000.exe'
           $uninstall = Start-Process -FilePath $uninstaller -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -Wait -PassThru
           if ($uninstall.ExitCode -ne 0) { throw "Uninstall failed: $($uninstall.ExitCode)" }
