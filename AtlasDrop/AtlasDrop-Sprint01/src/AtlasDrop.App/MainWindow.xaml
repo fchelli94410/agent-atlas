@@ -52,11 +52,15 @@
             </StackPanel>
         </Border>
 
-        <UniformGrid x:Name="DecisionButtons" Grid.Row="4" Columns="4" Margin="-5,8,-5,0">
-            <Button x:Name="YesButton" Content="C’EST EXACT" IsEnabled="False" Background="#17803D" Foreground="White" Click="OnYes"/>
-            <Button x:Name="NoButton" Content="BONNE BRANCHE" IsEnabled="False" Background="#2563EB" Foreground="White" Click="OnNo"/>
-            <Button x:Name="ChooseButton" Content="MAUVAIS DOSSIER" Background="#D97706" Foreground="White" Click="OnChoose"/>
-            <Button x:Name="CancelButton" Content="ANNULER" Click="OnCancel"/>
+        <UniformGrid x:Name="DecisionButtons" Grid.Row="4" Columns="4" Margin="-3,8,-3,0">
+            <Button x:Name="YesButton" Content="C’EST EXACT" IsEnabled="False" Background="#17803D" Foreground="#172033"
+                    FontSize="13" Padding="4,10" Margin="3,5" Click="OnYes"/>
+            <Button x:Name="NoButton" Content="BONNE BRANCHE" IsEnabled="False" Background="#2563EB" Foreground="#172033"
+                    FontSize="13" Padding="4,10" Margin="3,5" Click="OnNo"/>
+            <Button x:Name="ChooseButton" Content="MAUVAIS DOSSIER" Background="#D97706" Foreground="White"
+                    FontSize="13" Padding="4,10" Margin="3,5" Click="OnChoose"/>
+            <Button x:Name="CancelButton" Content="ANNULER"
+                    FontSize="13" Padding="4,10" Margin="3,5" Click="OnCancel"/>
         </UniformGrid>
 
         <StackPanel Grid.Row="5">
