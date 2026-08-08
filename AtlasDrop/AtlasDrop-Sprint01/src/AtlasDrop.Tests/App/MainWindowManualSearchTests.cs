@@ -206,14 +206,26 @@ public sealed class MainWindowExplorerRefinementTests
     }
 
     [Fact]
-    public void Destinations_outside_the_five_authorized_branches_are_rejected()
+    public void Manual_destination_can_use_any_OneDrive_branch()
     {
         var code = ReadCode();
 
-        Assert.Contains("private bool IsAllowedDestination", code, StringComparison.Ordinal);
-        Assert.Contains("!IsAllowedDestination(destination)", code, StringComparison.Ordinal);
-        Assert.Contains("destinationDepth < 1", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("IsAllowedDestination", code, StringComparison.Ordinal);
+        Assert.Contains("!IsUnderRoot(destination)", code, StringComparison.Ordinal);
+        Assert.Contains("destinationDepth < 0", code, StringComparison.Ordinal);
         Assert.Contains("folder-index-v112.json", code, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Health_documents_receive_a_health_folder_boost()
+    {
+        var code = ReadCode();
+
+        Assert.Contains("ExpandBusinessTokens(tokens)", code, StringComparison.Ordinal);
+        Assert.Contains("\"ordonnance\"", code, StringComparison.Ordinal);
+        Assert.Contains("\"biologie\"", code, StringComparison.Ordinal);
+        Assert.Contains("GetThematicBoost(analysis.Tokens, folder.Tokens)", code, StringComparison.Ordinal);
+        Assert.Contains("health && healthFolder ? 0.25d : 0d", code, StringComparison.Ordinal);
     }
 
 }

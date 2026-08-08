@@ -266,6 +266,7 @@ public partial class MainWindow : Window
             .ToArray();
         var dates = _dateDetection.Detect(combined);
         var tokens = Tokenize(combined).Where(x => !x.Equals("document", StringComparison.OrdinalIgnoreCase)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        ExpandBusinessTokens(tokens);
         var years = dates.Where(x => x.Value is not null).Select(x => x.Value!.Value.Year).Distinct().ToArray();
         var fallbackLabel = _classification.Type != DocumentType.Unknown ? _classification.Type.ToString() : "Document";
         if (fallbackLabel != "Document") tokens.Add(fallbackLabel);
@@ -309,8 +310,11 @@ public partial class MainWindow : Window
                     .Select(token => _learning[LearningKey(token, folder.Path)])
                     .ToArray();
                 var learned = learnedValues.Length == 0 ? 0d : learnedValues.Average();
-                var score = Math.Clamp(scored.Score + learned * 0.03, 0d, 1d);
-                var reason = scored.Reasons.FirstOrDefault() ?? "correspondance du dossier";
+                var thematicBoost = GetThematicBoost(analysis.Tokens, folder.Tokens);
+                var score = Math.Clamp(scored.Score + learned * 0.03 + thematicBoost, 0d, 1d);
+                var reason = thematicBoost > 0d
+                    ? "correspondance thématique du dossier"
+                    : scored.Reasons.FirstOrDefault() ?? "correspondance du dossier";
                 return new SuggestionOption(folder.Path, score, reason);
             })
             .Where(x => x.Score >= 0.30)
@@ -437,7 +441,7 @@ public partial class MainWindow : Window
         }
 
         var depth = GetDepth(_oneDriveRoot, destination);
-        if (!Directory.Exists(destination) || !IsAllowedDestination(destination) || depth < 1 || depth > MaxDepth)
+        if (!Directory.Exists(destination) || !IsUnderRoot(destination) || depth < 0 || depth > MaxDepth)
         {
             StatusText.Text = "Destination refusée : choisis un dossier OneDrive entre les niveaux 0 et 4.";
             return;
@@ -506,7 +510,7 @@ public partial class MainWindow : Window
     {
         if (string.IsNullOrWhiteSpace(_activePath) || string.IsNullOrWhiteSpace(destination)) return;
         var destinationDepth = GetDepth(_oneDriveRoot, destination);
-        if (!IsAllowedDestination(destination) || !Directory.Exists(destination) || destinationDepth < 1 || destinationDepth > MaxDepth)
+        if (!IsUnderRoot(destination) || !Directory.Exists(destination) || destinationDepth < 0 || destinationDepth > MaxDepth)
         {
             StatusText.Text = "Destination OneDrive invalide ou au-delà du niveau 4.";
             return;
@@ -879,15 +883,31 @@ public partial class MainWindow : Window
         return GetDepth(_oneDriveRoot, path) is 0 or 1;
     }
 
-    private bool IsAllowedDestination(string path)
+    private static double GetThematicBoost(
+        IReadOnlySet<string> documentTokens,
+        IReadOnlySet<string> folderTokens)
     {
-        if (!IsUnderRoot(path)) return false;
-        var relative = Path.GetRelativePath(_oneDriveRoot, path);
-        if (string.IsNullOrWhiteSpace(relative) || relative == ".") return false;
-        var firstSegment = relative.Split(
-            new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar },
-            StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
-        return firstSegment is not null && AllowedRootFolderNames.Contains(firstSegment);
+        var health = documentTokens.Contains("santé") || documentTokens.Contains("sante");
+        var healthFolder = folderTokens.Contains("santé") || folderTokens.Contains("sante");
+        return health && healthFolder ? 0.25d : 0d;
+    }
+
+    private static void ExpandBusinessTokens(HashSet<string> tokens)
+    {
+        var healthTerms = new HashSet<string>(
+            new[]
+            {
+                "ordonnance", "biologie", "laboratoire", "analyse", "analyses",
+                "medical", "médical", "medecin", "médecin", "sante", "santé"
+            },
+            StringComparer.OrdinalIgnoreCase);
+        if (tokens.Overlaps(healthTerms))
+        {
+            tokens.Add("santé");
+            tokens.Add("sante");
+            tokens.Add("médical");
+            tokens.Add("medical");
+        }
     }
 
     private static bool IsGenericFolder(string name) => name.Trim().ToLowerInvariant() is "divers" or "documents" or "fichiers" or "temp" or "tmp" or "autres";
