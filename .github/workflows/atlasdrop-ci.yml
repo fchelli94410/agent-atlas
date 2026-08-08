@@ -3,6 +3,7 @@ name: Atlas Drop Windows CI
 on:
   push:
     branches:
+      - main
       - agent/finalisation-atlas-drop
   pull_request:
     paths:
