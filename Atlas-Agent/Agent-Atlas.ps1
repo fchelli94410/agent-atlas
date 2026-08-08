@@ -96,8 +96,12 @@ function Queue-GitHubUpdate($Folders, $Config, [string]$LogPath) {
 
     $gh = Find-GitHubCli
     if ([string]::IsNullOrWhiteSpace($gh)) { throw 'GitHub CLI absent. Lance CONNECTER-GITHUB-AGENT-ATLAS.cmd.' }
-    & $gh auth status --hostname github.com 2>&1 | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw 'Connexion GitHub absente ou expiree.' }
+    $savedPreference = $ErrorActionPreference
+    $ErrorActionPreference = 'SilentlyContinue'
+    & $gh auth status --hostname github.com *> $null
+    $authStatus = $LASTEXITCODE
+    $ErrorActionPreference = $savedPreference
+    if ($authStatus -ne 0) { throw 'Connexion GitHub absente ou expiree.' }
 
     $commit = (& $gh api "repos/$repository/commits/$branch" --jq '.sha' 2>$null | Select-Object -First 1).Trim()
     if ($LASTEXITCODE -ne 0 -or $commit -notmatch '^[a-fA-F0-9]{40}$') { throw 'Commit GitHub distant introuvable.' }
