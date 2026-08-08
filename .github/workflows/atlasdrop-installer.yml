@@ -33,7 +33,7 @@ jobs:
       - name: Install Inno Setup compiler
         run: choco install innosetup --no-progress -y
       - name: Build single EXE installer
-        run: '& "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=1.0.11" "installer\AtlasDrop.iss"'
+        run: '& "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=1.0.12" "installer\AtlasDrop.iss"'
       - name: Verify public update channel
         shell: powershell
         run: |
