@@ -278,15 +278,13 @@ internal sealed class ExplorerMiddleClickActivation : IDisposable
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         AutomationElement? current = element;
 
-        // Windows 11 alternates between NameProperty and LegacyIAccessible.Name
-        // depending on whether the pointer is over the icon, label or spacing.
+        // Climb through the raw UI Automation tree: Windows 11 can expose the
+        // item name on the icon, its label, or one of their parent elements.
+        // Current.Name is available through UIAutomationClient on every target
+        // Windows version, unlike the optional legacy accessibility pattern.
         for (var level = 0; level < 16 && current is not null; level++)
         {
             AddName(current.Current.Name);
-            if (current.TryGetCurrentPattern(LegacyIAccessiblePattern.Pattern,
-                    out var legacyObject) && legacyObject is LegacyIAccessiblePattern legacy)
-                AddName(legacy.Current.Name);
-
             current = TreeWalker.RawViewWalker.GetParent(current);
         }
 
