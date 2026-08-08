@@ -17,7 +17,7 @@ public sealed class MainWindowWorkflowTests
     }
 
     [Theory]
-    [InlineData("MaxDepth = 5")]
+    [InlineData("MaxDepth = 4")]
     [InlineData("CountItems(_activePath)")]
     [InlineData("RecordLearning")]
     [InlineData("AvailableTarget")]
