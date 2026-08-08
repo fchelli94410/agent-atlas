@@ -35,6 +35,16 @@ namespace AtlasDrop.App;
 public partial class MainWindow : Window
 {
     private const int MaxDepth = 4;
+    private static readonly HashSet<string> AllowedRootFolderNames = new(
+        new[]
+        {
+            "01 - Immobilier",
+            "02 - Activités Professionnelles",
+            "03 - Finances personnelles",
+            "04 - Quotidien",
+            "05 - Projets"
+        },
+        StringComparer.OrdinalIgnoreCase);
     private const int WeakPositiveLearningWeight = 1;
     private const int StrongPositiveLearningWeight = 3;
     private const int NegativeLearningWeight = -3;
@@ -427,7 +437,7 @@ public partial class MainWindow : Window
         }
 
         var depth = GetDepth(_oneDriveRoot, destination);
-        if (!Directory.Exists(destination) || !IsUnderRoot(destination) || depth < 0 || depth > MaxDepth)
+        if (!Directory.Exists(destination) || !IsAllowedDestination(destination) || depth < 1 || depth > MaxDepth)
         {
             StatusText.Text = "Destination refusée : choisis un dossier OneDrive entre les niveaux 0 et 4.";
             return;
@@ -496,7 +506,7 @@ public partial class MainWindow : Window
     {
         if (string.IsNullOrWhiteSpace(_activePath) || string.IsNullOrWhiteSpace(destination)) return;
         var destinationDepth = GetDepth(_oneDriveRoot, destination);
-        if (!IsUnderRoot(destination) || !Directory.Exists(destination) || destinationDepth < 0 || destinationDepth > MaxDepth)
+        if (!IsAllowedDestination(destination) || !Directory.Exists(destination) || destinationDepth < 1 || destinationDepth > MaxDepth)
         {
             StatusText.Text = "Destination OneDrive invalide ou au-delà du niveau 4.";
             return;
@@ -653,6 +663,7 @@ public partial class MainWindow : Window
             {
                 foreach (var child in Directory.EnumerateDirectories(current.Path))
                 {
+                    if (current.Depth == 0 && !AllowedRootFolderNames.Contains(Path.GetFileName(child))) continue;
                     var relative = Path.GetRelativePath(root, child);
                     if (IsExcludedFolder(relative)) continue;
                     var depth = current.Depth + 1;
@@ -679,7 +690,7 @@ public partial class MainWindow : Window
 
     private List<FolderEntry> LoadOrBuildIndex()
     {
-        var cache = Path.Combine(_stateDirectory, "folder-index-v108.json");
+        var cache = Path.Combine(_stateDirectory, "folder-index-v112.json");
         try
         {
             if (File.Exists(cache) && DateTime.UtcNow - File.GetLastWriteTimeUtc(cache) < TimeSpan.FromHours(12))
@@ -704,6 +715,7 @@ public partial class MainWindow : Window
                 {
                     foreach (var child in Directory.EnumerateDirectories(current.Path))
                     {
+                        if (current.Depth == 0 && !AllowedRootFolderNames.Contains(Path.GetFileName(child))) continue;
                         var depth = current.Depth + 1;
                         var signals = new List<string> { Path.GetRelativePath(_oneDriveRoot, child) };
                         try { signals.AddRange(Directory.EnumerateFileSystemEntries(child).Take(50).Select(Path.GetFileName)!); } catch { }
@@ -719,7 +731,7 @@ public partial class MainWindow : Window
 
     private void SaveIndex(List<FolderEntry> folders)
     {
-        try { File.WriteAllText(Path.Combine(_stateDirectory, "folder-index-v108.json"), JsonSerializer.Serialize(folders)); } catch { }
+        try { File.WriteAllText(Path.Combine(_stateDirectory, "folder-index-v112.json"), JsonSerializer.Serialize(folders)); } catch { }
     }
 
     private void StartIndexWatcher()
@@ -865,6 +877,17 @@ public partial class MainWindow : Window
     {
         if (!Directory.Exists(path) || !IsUnderRoot(path)) return false;
         return GetDepth(_oneDriveRoot, path) is 0 or 1;
+    }
+
+    private bool IsAllowedDestination(string path)
+    {
+        if (!IsUnderRoot(path)) return false;
+        var relative = Path.GetRelativePath(_oneDriveRoot, path);
+        if (string.IsNullOrWhiteSpace(relative) || relative == ".") return false;
+        var firstSegment = relative.Split(
+            new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar },
+            StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
+        return firstSegment is not null && AllowedRootFolderNames.Contains(firstSegment);
     }
 
     private static bool IsGenericFolder(string name) => name.Trim().ToLowerInvariant() is "divers" or "documents" or "fichiers" or "temp" or "tmp" or "autres";
