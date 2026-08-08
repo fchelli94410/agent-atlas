@@ -26,43 +26,35 @@ public sealed class MainWindowFolderCreationTests
     }
 
     [Fact]
-    public void Create_folder_button_is_connected()
+    public void Obsolete_internal_folder_creation_controls_are_removed()
     {
-        var code = File.ReadAllText(
-            FindFile("MainWindow.xaml.cs"));
+        var xaml = File.ReadAllText(FindFile("MainWindow.xaml"));
+        var code = File.ReadAllText(FindFile("MainWindow.xaml.cs"));
+
+        Assert.DoesNotContain("CreateFolderButton", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("NewFolderNameTextBox", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("SafeFolderCreationService", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("FolderCreationRequest", code, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Wrong_folder_starts_explorer_at_onedrive_root()
+    {
+        var code = File.ReadAllText(FindFile("MainWindow.xaml.cs"));
 
         Assert.Contains(
-            "CreateFolderButton.Click += OnCreateFolderClicked",
+            "await EnterExplorerRefinementModeAsync(_oneDriveRoot)",
             code,
             StringComparison.Ordinal);
     }
 
     [Fact]
-    public void Folder_creation_uses_safe_service()
+    public void Current_tracked_explorer_path_becomes_the_destination()
     {
-        var code = File.ReadAllText(
-            FindFile("MainWindow.xaml.cs"));
+        var code = File.ReadAllText(FindFile("MainWindow.xaml.cs"));
 
-        Assert.Contains(
-            "SafeFolderCreationService",
-            code,
-            StringComparison.Ordinal);
-
-        Assert.Contains(
-            "FolderCreationRequest",
-            code,
-            StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void Created_folder_becomes_selected_manual_destination()
-    {
-        var code = File.ReadAllText(
-            FindFile("MainWindow.xaml.cs"));
-
-        Assert.Contains(
-            "SelectedManualDestinationText.Text = result.FullPath",
-            code,
-            StringComparison.Ordinal);
+        Assert.Contains("TryGetExplorerPathByHwnd", code, StringComparison.Ordinal);
+        Assert.Contains("ExecuteMoveOnceAsync(destination)", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("SelectedManualDestinationText", code, StringComparison.Ordinal);
     }
 }
