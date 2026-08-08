@@ -7,7 +7,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0Connecter-GitHub-A
 if errorlevel 1 goto :error
 echo.
 echo AGENT ATLAS EST INSTALLE ET CONNECTE.
-pause
+timeout /t 5 /nobreak >nul
 exit /b 0
 
 :error
