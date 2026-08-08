@@ -4,5 +4,9 @@
   "maxPackageBytes": 524288000,
   "maxBackups": 3,
   "atlasDropInstallPath": "%LOCALAPPDATA%\\AtlasDrop\\app",
-  "allowedSteps": ["restore", "build", "test", "self-test"]
+  "allowedSteps": ["restore", "build", "test", "self-test"],
+  "githubEnabled": false,
+  "githubRepository": "fchelli94410/agent-atlas",
+  "githubBranch": "main",
+  "githubPollMinutes": 5
 }
