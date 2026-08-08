@@ -65,12 +65,9 @@ public partial class App : Application
 
         _middleClickActivation.ExplorerClickDetected += (_, _) =>
         {
-            Dispatcher.BeginInvoke(() =>
-            {
-                mainWindow.SignalMiddleClickDetected();
-                mainWindow.Show();
-                mainWindow.Activate();
-            });
+            _logger?.Information(
+                "MiddleClickDetected",
+                "Clic molette détecté ; résolution du fichier en cours.");
         };
 
         _middleClickActivation.ItemActivated += (_, itemPath) =>
@@ -95,6 +92,13 @@ public partial class App : Application
             _logger?.Information(
                 "MiddleClickItemResolutionFailed",
                 $"Clic détecté, mais élément non résolu. {diagnostic}");
+
+            Dispatcher.BeginInvoke(() =>
+            {
+                mainWindow.SignalMiddleClickResolutionFailed();
+                mainWindow.Show();
+                mainWindow.Activate();
+            });
         };
 
         try
