@@ -1,8 +1,12 @@
+using System.Diagnostics;
+using System.IO;
+using System.Net.Http;
 using System.Windows;
 using AtlasDrop.Core.Integration;
 using AtlasDrop.Core.Logging;
 using AtlasDrop.Infrastructure.Integration;
 using AtlasDrop.Infrastructure.Logging;
+using AtlasDrop.Infrastructure.Updates;
 
 namespace AtlasDrop.App;
 
@@ -12,6 +16,8 @@ public partial class App : Application
     private CancellationTokenSource? _listenerCts;
     private SerilogAtlasLogger? _logger;
     private ExplorerMiddleClickActivation? _middleClickActivation;
+    private HttpClient? _updateHttpClient;
+    private int _updateLaunchStarted;
 
     protected override async void OnStartup(
         StartupEventArgs e)
@@ -132,6 +138,9 @@ public partial class App : Application
             _activationChannel,
             _listenerCts.Token);
 
+        _ = CheckForUpdatesAsync(
+            _listenerCts.Token);
+
         // Atlas Drop stays quietly in the background until an item is
         // activated with the middle mouse button (or through the legacy pipe).
         if (!string.IsNullOrWhiteSpace(requestedFile))
@@ -148,6 +157,7 @@ public partial class App : Application
         _listenerCts?.Dispose();
         _activationChannel?.Dispose();
         _middleClickActivation?.Dispose();
+        _updateHttpClient?.Dispose();
 
         _logger?.Information(
             "AppExit",
@@ -156,6 +166,75 @@ public partial class App : Application
         _logger?.Dispose();
 
         base.OnExit(e);
+    }
+
+    private async Task CheckForUpdatesAsync(
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            _updateHttpClient = new HttpClient
+            {
+                Timeout = TimeSpan.FromMinutes(5)
+            };
+
+            var updater = new AtlasUpdateService(
+                _updateHttpClient,
+                _logger!);
+
+            var currentVersion =
+                typeof(App).Assembly.GetName().Version
+                ?? new Version(1, 0, 0);
+
+            var result = await updater.PrepareUpdateAsync(
+                currentVersion,
+                cancellationToken);
+
+            if (result.Status != UpdatePreparationStatus.Ready ||
+                string.IsNullOrWhiteSpace(result.InstallerPath))
+            {
+                return;
+            }
+
+            await Dispatcher.InvokeAsync(() =>
+            {
+                if (Interlocked.Exchange(
+                    ref _updateLaunchStarted,
+                    1) != 0)
+                {
+                    return;
+                }
+
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = result.InstallerPath,
+                    Arguments =
+                        "/VERYSILENT /SUPPRESSMSGBOXES " +
+                        "/NORESTART /CLOSEAPPLICATIONS /UPDATE=1",
+                    WorkingDirectory =
+                        Path.GetDirectoryName(result.InstallerPath),
+                    UseShellExecute = true
+                });
+
+                _logger?.Information(
+                    "UpdateInstallerStarted",
+                    $"Installation de la version {result.Version} lancée.");
+
+                Shutdown();
+            });
+        }
+        catch (OperationCanceledException)
+            when (cancellationToken.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            _logger?.Error(
+                "UpdateLaunchFailed",
+                "La mise à jour automatique n'a pas pu démarrer. " +
+                "La version installée reste active.",
+                ex);
+        }
     }
 
     private static async Task ListenAsync(
