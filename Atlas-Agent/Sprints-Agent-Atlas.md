@@ -66,6 +66,8 @@ Relier l’Inbox à une source HTTPS/OneDrive autorisée et exiger une signature
 
 Validation : aucune version distante non signée ne peut être installée.
 
+État : implémenté avec authentification GitHub locale, dépôt privé fixe, branche `main`, contrôle SHA-256 et validations locales. Test Windows final en attente.
+
 ## Sprint 12 — Retour de diagnostics (v1.1)
 
 Transmettre uniquement les rapports Atlas vers une destination autorisée.
