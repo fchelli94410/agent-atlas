@@ -42,7 +42,15 @@ try {
     if ($authStatus -ne 0) {
         Write-Host 'Ton navigateur va s ouvrir pour une autorisation GitHub unique.' -ForegroundColor Yellow
         & $gh auth login --hostname github.com --git-protocol https --web
-        if ($LASTEXITCODE -ne 0) { throw 'Connexion GitHub annulee ou echouee.' }
+        $loginExit = $LASTEXITCODE
+        if ($loginExit -ne 0) {
+            $savedPreference = $ErrorActionPreference
+            $ErrorActionPreference = 'SilentlyContinue'
+            & $gh auth status --hostname github.com *> $null
+            $authStatusAfterLogin = $LASTEXITCODE
+            $ErrorActionPreference = $savedPreference
+            if ($authStatusAfterLogin -ne 0) { throw 'Connexion GitHub annulee ou echouee.' }
+        }
     }
     $resolved = (& $gh api "repos/$repository" --jq '.full_name' 2>$null | Select-Object -First 1).Trim()
     if ($resolved -ne $repository) { throw 'Le depot prive agent-atlas est inaccessible.' }
