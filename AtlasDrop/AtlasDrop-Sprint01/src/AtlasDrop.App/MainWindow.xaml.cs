@@ -437,7 +437,7 @@ public partial class MainWindow : Window
         }
 
         var depth = GetDepth(_oneDriveRoot, destination);
-        if (!Directory.Exists(destination) || !IsAllowedDestination(destination) || depth < 1 || depth > MaxDepth)
+        if (!Directory.Exists(destination) || !IsUnderRoot(destination) || depth < 0 || depth > MaxDepth)
         {
             StatusText.Text = "Destination refusée : choisis un dossier OneDrive entre les niveaux 0 et 4.";
             return;
@@ -506,7 +506,7 @@ public partial class MainWindow : Window
     {
         if (string.IsNullOrWhiteSpace(_activePath) || string.IsNullOrWhiteSpace(destination)) return;
         var destinationDepth = GetDepth(_oneDriveRoot, destination);
-        if (!IsAllowedDestination(destination) || !Directory.Exists(destination) || destinationDepth < 1 || destinationDepth > MaxDepth)
+        if (!IsUnderRoot(destination) || !Directory.Exists(destination) || destinationDepth < 0 || destinationDepth > MaxDepth)
         {
             StatusText.Text = "Destination OneDrive invalide ou au-delà du niveau 4.";
             return;
@@ -877,17 +877,6 @@ public partial class MainWindow : Window
     {
         if (!Directory.Exists(path) || !IsUnderRoot(path)) return false;
         return GetDepth(_oneDriveRoot, path) is 0 or 1;
-    }
-
-    private bool IsAllowedDestination(string path)
-    {
-        if (!IsUnderRoot(path)) return false;
-        var relative = Path.GetRelativePath(_oneDriveRoot, path);
-        if (string.IsNullOrWhiteSpace(relative) || relative == ".") return false;
-        var firstSegment = relative.Split(
-            new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar },
-            StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
-        return firstSegment is not null && AllowedRootFolderNames.Contains(firstSegment);
     }
 
     private static bool IsGenericFolder(string name) => name.Trim().ToLowerInvariant() is "divers" or "documents" or "fichiers" or "temp" or "tmp" or "autres";
