@@ -54,6 +54,98 @@ function Move-PackageFiles($Context, [string]$Destination) {
     }
 }
 
+function Find-GitHubCli {
+    $command = Get-Command gh.exe -ErrorAction SilentlyContinue
+    if ($null -ne $command) { return $command.Source }
+    $candidates = @(
+        (Join-Path $env:ProgramFiles 'GitHub CLI\gh.exe'),
+        (Join-Path $env:LOCALAPPDATA 'Programs\GitHub CLI\gh.exe')
+    )
+    foreach ($candidate in $candidates) {
+        if (Test-Path -LiteralPath $candidate -PathType Leaf) { return $candidate }
+    }
+    $wingetRoot = Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Packages'
+    if (Test-Path -LiteralPath $wingetRoot) {
+        $found = Get-ChildItem -LiteralPath $wingetRoot -Filter 'gh.exe' -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($null -ne $found) { return $found.FullName }
+    }
+    return $null
+}
+
+function Get-RemoteState([string]$StatePath) {
+    try {
+        if (Test-Path -LiteralPath $StatePath -PathType Leaf) {
+            return Get-Content -LiteralPath $StatePath -Raw -Encoding UTF8 | ConvertFrom-Json
+        }
+    }
+    catch { }
+    return [pscustomobject]@{ lastQueuedCommit = '' }
+}
+
+function Save-RemoteState([string]$StatePath, [string]$Commit) {
+    [ordered]@{ lastQueuedCommit=$Commit; queuedUtc=[DateTime]::UtcNow.ToString('o') } |
+        ConvertTo-Json | Set-Content -LiteralPath $StatePath -Encoding UTF8
+}
+
+function Queue-GitHubUpdate($Folders, $Config, [string]$LogPath) {
+    if (-not [bool]$Config.githubEnabled) { return }
+    $repository = [string]$Config.githubRepository
+    $branch = [string]$Config.githubBranch
+    if ($repository -notmatch '^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$') { throw 'Depot GitHub invalide.' }
+    if ($branch -notmatch '^[A-Za-z0-9._/-]+$') { throw 'Branche GitHub invalide.' }
+
+    $gh = Find-GitHubCli
+    if ([string]::IsNullOrWhiteSpace($gh)) { throw 'GitHub CLI absent. Lance CONNECTER-GITHUB-AGENT-ATLAS.cmd.' }
+    & $gh auth status --hostname github.com 2>&1 | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'Connexion GitHub absente ou expiree.' }
+
+    $commit = (& $gh api "repos/$repository/commits/$branch" --jq '.sha' 2>$null | Select-Object -First 1).Trim()
+    if ($LASTEXITCODE -ne 0 -or $commit -notmatch '^[a-fA-F0-9]{40}$') { throw 'Commit GitHub distant introuvable.' }
+    $statePath = Join-Path $Folders.State 'github-state.json'
+    $state = Get-RemoteState $statePath
+    if ([string]$state.lastQueuedCommit -eq $commit) { return }
+
+    $downloadRoot = Join-Path $Folders.Work ('github-' + [Guid]::NewGuid().ToString('N'))
+    New-Item -ItemType Directory -Path $downloadRoot -Force | Out-Null
+    try {
+        $archivePath = Join-Path $downloadRoot 'repository.zip'
+        $token = (& $gh auth token --hostname github.com 2>$null | Select-Object -First 1).Trim()
+        if ([string]::IsNullOrWhiteSpace($token)) { throw 'Jeton GitHub indisponible.' }
+        $headers = @{ Authorization="Bearer $token"; Accept='application/vnd.github+json'; 'User-Agent'='Atlas-Agent' }
+        Invoke-WebRequest -Uri "https://api.github.com/repos/$repository/zipball/$branch" -Headers $headers -OutFile $archivePath -UseBasicParsing
+        $extractPath = Join-Path $downloadRoot 'repository'
+        Assert-SafeZip $archivePath $extractPath
+        New-Item -ItemType Directory -Path $extractPath -Force | Out-Null
+        Expand-Archive -LiteralPath $archivePath -DestinationPath $extractPath -Force
+        $appRoot = Get-ChildItem -LiteralPath $extractPath -Directory | ForEach-Object { Join-Path $_.FullName 'AtlasDrop' } | Where-Object { Test-Path -LiteralPath $_ -PathType Container } | Select-Object -First 1
+        if ([string]::IsNullOrWhiteSpace($appRoot)) { throw 'Dossier AtlasDrop absent du depot GitHub.' }
+        $readme = Join-Path $appRoot 'README.txt'
+        $baseVersion = '1.0.0'
+        if (Test-Path -LiteralPath $readme -PathType Leaf) {
+            $match = [regex]::Match((Get-Content -LiteralPath $readme -Raw -Encoding UTF8), 'v(\d+\.\d+\.\d+)')
+            if ($match.Success) { $baseVersion = $match.Groups[1].Value }
+        }
+        $version = "$baseVersion-$($commit.Substring(0,7).ToLowerInvariant())"
+        $packageName = "AtlasDrop-$version.zip"
+        $packagePath = Join-Path $Folders.Inbox $packageName
+        if (Test-Path -LiteralPath $packagePath) { Remove-Item -LiteralPath $packagePath -Force }
+        Compress-Archive -Path (Join-Path $appRoot '*') -DestinationPath $packagePath -CompressionLevel Optimal
+        $hash = (Get-FileHash -LiteralPath $packagePath -Algorithm SHA256).Hash.ToLowerInvariant()
+        $manifest = [ordered]@{
+            schemaVersion=1; product='AtlasDrop'; version=$version; packageFile=$packageName
+            sha256=$hash; expectedExecutable='AtlasDrop.App.exe'; steps=@('restore','build','test'); timeoutMinutes=30
+            sourceRepository=$repository; sourceBranch=$branch; sourceCommit=$commit; createdUtc=[DateTime]::UtcNow.ToString('o')
+        }
+        $manifestPath = Join-Path $Folders.Inbox "AtlasDrop-$version.manifest.json"
+        $manifest | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $manifestPath -Encoding UTF8
+        Save-RemoteState $statePath $commit
+        Write-AgentLog $LogPath 'INFO' "Mise a jour GitHub mise en attente : $commit"
+    }
+    finally {
+        Remove-Item -LiteralPath $downloadRoot -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+
 function Assert-SafeManifest($Manifest, [string]$ManifestPath, $Config) {
     $required = @('schemaVersion','product','version','packageFile','sha256','expectedExecutable','steps','timeoutMinutes')
     foreach ($field in $required) {
@@ -248,7 +340,15 @@ $mutex = New-Object Threading.Mutex($false, 'Local\AtlasAgent-v1')
 if (-not $mutex.WaitOne(0)) { exit 0 }
 
 try {
+    $nextGitHubCheck = [DateTime]::MinValue
     do {
+        if ([DateTime]::UtcNow -ge $nextGitHubCheck) {
+            $syncLog = Join-Path $folders.Reports 'github-sync.log'
+            try { Queue-GitHubUpdate $folders $config $syncLog }
+            catch { Write-AgentLog $syncLog 'ERROR' $_.Exception.Message }
+            $minutes = if ($null -ne $config.githubPollMinutes) { [Math]::Max(1,[int]$config.githubPollMinutes) } else { 5 }
+            $nextGitHubCheck = [DateTime]::UtcNow.AddMinutes($minutes)
+        }
         @(Get-ChildItem -LiteralPath $folders.Inbox -Filter '*.manifest.json' -File -ErrorAction SilentlyContinue | Sort-Object CreationTimeUtc) |
             ForEach-Object { Process-Manifest $_ $folders $config }
         if (-not $Watch) { break }

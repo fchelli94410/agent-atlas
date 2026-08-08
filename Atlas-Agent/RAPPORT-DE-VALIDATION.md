@@ -1,4 +1,4 @@
-# Rapport de validation — Agent Atlas v1.0
+# Rapport de validation — Agent Atlas v1.1
 
 Date : 8 août 2026
 
@@ -20,21 +20,27 @@ Date : 8 août 2026
 - Rapports JSON, journaux, quarantaine et rétention des sauvegardes.
 - Créateur de paquets.
 - Test automatique Windows sans action pendant l’exécution.
+- Connexion GitHub unique par navigateur sans mot de passe dans les scripts.
+- Surveillance du dépôt privé et de la branche `main` toutes les cinq minutes.
+- Téléchargement limité au dépôt `fchelli94410/agent-atlas`.
+- Création locale d’un paquet avec SHA-256 avant validation et installation.
 
 ## Contrôles exécutés dans Work
 
 - Présence de tous les livrables : réussie.
 - Validité du fichier JSON : réussie.
+- GitHub désactivé par défaut avant autorisation : réussi.
+- Dépôt et branche limités dans la configuration : réussi.
 - Recherche de téléchargement réseau ou d’exécution dynamique : aucun mécanisme trouvé.
 - Vérification des chemins destructifs larges : aucun effacement de dossier utilisateur général.
 - Archive finale et inventaire : à produire après ce rapport.
 
 ## Non validable dans Work
 
-Work fonctionne sous Linux et ne possède ni Windows PowerShell 5.1, ni le Planificateur de tâches Windows, ni le Bureau Windows. La syntaxe et le comportement Windows réel ne peuvent donc pas être certifiés ici.
+Work fonctionne sous Linux et ne possède ni Windows PowerShell 5.1, ni le Planificateur de tâches Windows, ni le Bureau Windows. La connexion par navigateur et le comportement Windows réel ne peuvent donc pas être certifiés ici.
 
-Le paquet est une version de développement complète, mais il ne doit pas être présenté comme validé sur le PC tant que le test Windows automatique n’a pas produit `TEST AUTOMATIQUE REUSSI`.
+Le paquet est une version de développement complète, mais il ne doit pas être présenté comme validé sur le PC tant que le test Windows automatique n’a pas produit `TEST AUTOMATIQUE REUSSI` et que la connexion GitHub n’a pas affiché `CONNEXION REUSSIE`.
 
 ## Limite du zéro-intervention
 
-Après l’installation initiale, l’agent traite seul tout paquet arrivé dans son Inbox. Le dépôt automatique depuis ChatGPT Work nécessite encore un canal synchronisé autorisé et signé. Il est prévu aux sprints 11 et 12, mais n’est pas simulé comme terminé dans la v1.0.
+Après l’installation initiale et la connexion GitHub unique, l’agent peut récupérer seul les changements de `main`. Le retour automatique des diagnostics vers GitHub reste hors périmètre de la v1.1.
