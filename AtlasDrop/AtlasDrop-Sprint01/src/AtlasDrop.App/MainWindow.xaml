@@ -42,9 +42,21 @@
 
         <Border x:Name="ManualPanel" Grid.Row="3" Background="White" BorderBrush="#D5DBE5" BorderThickness="1" CornerRadius="9" Padding="10" Visibility="Collapsed">
             <Grid>
-                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                 <TextBlock Text="Choisis le dossier OneDrive" FontWeight="SemiBold" Margin="4"/>
-                <TreeView x:Name="FolderTree" Grid.Row="1" Margin="0,7,0,0" SelectedItemChanged="OnFolderSelected"/>
+                <DockPanel Grid.Row="1" Margin="0,5,0,0">
+                    <Button x:Name="SearchButton" Content="RECHERCHER" DockPanel.Dock="Right" MinHeight="34" Padding="8,4"/>
+                    <TextBox x:Name="SearchTextBox" Padding="7" VerticalContentAlignment="Center"/>
+                </DockPanel>
+                <ListBox x:Name="SearchResultsList" Grid.Row="2" MaxHeight="100" Margin="0,5,0,0" SelectionChanged="OnManualSearchResultSelected" DisplayMemberPath="Path"/>
+                <TreeView x:Name="FolderTree" Grid.Row="3" Margin="0,7,0,0" SelectedItemChanged="OnFolderSelected"/>
+                <StackPanel Grid.Row="4">
+                    <TextBlock x:Name="SelectedManualDestinationText" Text="Aucun dossier sélectionné" TextWrapping="Wrap"/>
+                    <DockPanel>
+                        <Button x:Name="CreateFolderButton" Content="CRÉER LE DOSSIER" DockPanel.Dock="Right" MinHeight="34" Padding="8,4"/>
+                        <TextBox x:Name="NewFolderNameTextBox" Padding="7" Margin="0,5,0,0"/>
+                    </DockPanel>
+                </StackPanel>
             </Grid>
         </Border>
 
@@ -68,7 +80,15 @@
             </Border>
         </StackPanel>
 
-        <TextBlock x:Name="StatusText" Grid.Row="6" Text="Atlas Drop fonctionne en arrière-plan." Margin="0,9,0,0"
-                   TextAlignment="Center" Foreground="#657089" TextWrapping="Wrap"/>
+        <StackPanel Grid.Row="6" Margin="0,8,0,0">
+            <TextBlock x:Name="PathLengthStatusText" Foreground="#657089" TextAlignment="Center" TextWrapping="Wrap"/>
+            <DockPanel Margin="0,4,0,0">
+                <Button x:Name="ResetLearningButton" Content="EFFACER APPRENTISSAGE" DockPanel.Dock="Right" MinHeight="30" Padding="7,3"/>
+                <CheckBox x:Name="LearningEnabledCheckBox" Content="Apprentissage activé" IsChecked="True" VerticalAlignment="Center"/>
+            </DockPanel>
+            <TextBlock x:Name="LearningStatusText" Foreground="#657089" TextAlignment="Center"/>
+            <TextBlock x:Name="StatusText" Text="Atlas Drop fonctionne en arrière-plan."
+                       TextAlignment="Center" Foreground="#657089" TextWrapping="Wrap"/>
+        </StackPanel>
     </Grid>
 </Window>
