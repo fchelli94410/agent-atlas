@@ -24,7 +24,7 @@ public sealed class MiddleClickActivationFlowRegressionTests
         var failureHandler = Slice(
             appCode,
             "_middleClickActivation.ItemResolutionFailed +=",
-            "try\n        {\n            _middleClickActivation.Start()");
+            "_middleClickActivation.Start();");
 
         Assert.Contains("Dispatcher.BeginInvoke", failureHandler, StringComparison.Ordinal);
         Assert.Contains("SignalMiddleClickResolutionFailed", failureHandler, StringComparison.Ordinal);
