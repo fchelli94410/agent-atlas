@@ -6,6 +6,7 @@ using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
+using System.Windows.Input;
 using System.Windows.Threading;
 using AtlasDrop.Analysis.Classification;
 using AtlasDrop.Analysis.Companies;
@@ -334,6 +335,14 @@ public partial class MainWindow : Window
         ConfidenceText.Text = $"Confiance {option.Score:P0} — {option.Reason}";
         YesButton.IsEnabled = true;
         if (_analysis is not null && _activePath is not null) PrepareRename(_activePath, _analysis, option);
+    }
+
+    private async void OnProposedPathClicked(object sender, MouseButtonEventArgs e)
+    {
+        if (string.IsNullOrWhiteSpace(_proposedFolder)) return;
+        _decisionPath = DecisionPath.GoodBranch;
+        _initialSuggestedFolder = _proposedFolder;
+        await EnterExplorerRefinementModeAsync(_proposedFolder);
     }
 
     private void PrepareRename(string path, AnalysisSnapshot analysis, SuggestionOption? option)

@@ -1,5 +1,5 @@
 #ifndef AppVersion
-  #define AppVersion "1.0.13"
+  #define AppVersion "1.0.14"
 #endif
 #define AppName "Atlas Drop"
 #define AppExeName "AtlasDrop.App.exe"
@@ -31,6 +31,12 @@ Source: "publish\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs creat
 [Icons]
 Name: "{autodesktop}\Atlas Drop"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"
 Name: "{userstartup}\Atlas Drop"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"
+
+[Registry]
+Root: HKA; Subkey: "Software\Classes\*\shell\AtlasDrop"; ValueType: string; ValueName: ""; ValueData: "Ranger avec Atlas Drop"; Flags: uninsdeletekey
+Root: HKA; Subkey: "Software\Classes\*\shell\AtlasDrop"; ValueType: string; ValueName: "Icon"; ValueData: """{app}\{#AppExeName}"""
+Root: HKA; Subkey: "Software\Classes\*\shell\AtlasDrop"; ValueType: string; ValueName: "Position"; ValueData: "Top"
+Root: HKA; Subkey: "Software\Classes\*\shell\AtlasDrop\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#AppExeName}"" ""%1"""
 
 [Run]
 Filename: "{app}\{#AppExeName}"; Description: "Lancer Atlas Drop"; Flags: nowait postinstall skipifsilent

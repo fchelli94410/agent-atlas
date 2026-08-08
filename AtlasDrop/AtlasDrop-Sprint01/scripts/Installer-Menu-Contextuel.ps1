@@ -17,6 +17,7 @@ $command = Join-Path $key "command"
 New-Item -Path $key -Force | Out-Null
 Set-Item -Path $key -Value "Ranger avec Atlas Drop"
 New-ItemProperty -Path $key -Name "Icon" -Value ('"' + $full + '"') -PropertyType String -Force | Out-Null
+New-ItemProperty -Path $key -Name "Position" -Value "Top" -PropertyType String -Force | Out-Null
 
 New-Item -Path $command -Force | Out-Null
 Set-Item -Path $command -Value ('"' + $full + '" "%1"')

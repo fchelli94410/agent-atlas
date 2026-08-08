@@ -69,6 +69,18 @@ public sealed class WindowsContextMenuServiceTests
     }
 
     [Fact]
+    public void Menu_is_requested_at_the_top_and_uses_the_app_icon()
+    {
+        var code = File.ReadAllText(
+            FindInfrastructureFile());
+
+        Assert.Contains("\"Position\"", code, StringComparison.Ordinal);
+        Assert.Contains("\"Top\"", code, StringComparison.Ordinal);
+        Assert.Contains("\"Icon\"", code, StringComparison.Ordinal);
+        Assert.Contains("Quote(fullPath)", code, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Command_passes_selected_file_as_first_argument()
     {
         var code = File.ReadAllText(

@@ -87,6 +87,22 @@ public sealed class MainWindowExplorerRefinementTests
     }
 
     [Fact]
+    public void Proposed_folder_is_clickable_and_opens_without_moving()
+    {
+        var code = ReadCode();
+        var xaml = File.ReadAllText(FindFile("MainWindow.xaml"));
+        var click = MethodBlock(
+            code,
+            "private async void OnProposedPathClicked",
+            "private void PrepareRename");
+
+        Assert.Contains("MouseLeftButtonUp=\"OnProposedPathClicked\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Cursor=\"Hand\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("await EnterExplorerRefinementModeAsync(_proposedFolder)", click, StringComparison.Ordinal);
+        Assert.DoesNotContain("MoveAsync", click, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Explorer_refinement_does_not_move_before_deposit_here()
     {
         var code = ReadCode();
