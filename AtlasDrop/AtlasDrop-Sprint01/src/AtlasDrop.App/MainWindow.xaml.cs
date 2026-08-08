@@ -34,7 +34,7 @@ namespace AtlasDrop.App;
 
 public partial class MainWindow : Window
 {
-    private const int MaxDepth = 5;
+    private const int MaxDepth = 4;
     private readonly WindowsUserFeedbackService _feedback = new();
     private readonly DispatcherTimer _closeTimer = new() { Interval = TimeSpan.FromSeconds(2) };
     private readonly DispatcherTimer _indexRefreshTimer = new() { Interval = TimeSpan.FromSeconds(3) };
@@ -274,7 +274,7 @@ public partial class MainWindow : Window
             .Select(g => g.OrderByDescending(x => x.Score).First())
             .OrderByDescending(x => x.Score)
             .ThenBy(x => x.FullPath, StringComparer.OrdinalIgnoreCase)
-            .Take(3)
+            .Take(1)
             .ToList();
     }
 
