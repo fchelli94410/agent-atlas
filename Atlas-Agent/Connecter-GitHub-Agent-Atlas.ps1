@@ -34,8 +34,12 @@ try {
         if ([string]::IsNullOrWhiteSpace($gh)) { throw 'GitHub CLI installe mais introuvable. Redemarre Windows puis relance ce fichier.' }
     }
 
-    & $gh auth status --hostname github.com 2>&1 | Out-Null
-    if ($LASTEXITCODE -ne 0) {
+    $savedPreference = $ErrorActionPreference
+    $ErrorActionPreference = 'SilentlyContinue'
+    & $gh auth status --hostname github.com *> $null
+    $authStatus = $LASTEXITCODE
+    $ErrorActionPreference = $savedPreference
+    if ($authStatus -ne 0) {
         Write-Host 'Ton navigateur va s ouvrir pour une autorisation GitHub unique.' -ForegroundColor Yellow
         & $gh auth login --hostname github.com --git-protocol https --web
         if ($LASTEXITCODE -ne 0) { throw 'Connexion GitHub annulee ou echouee.' }
@@ -57,6 +61,5 @@ try {
 catch {
     Write-Host ''
     Write-Host "ERREUR : $($_.Exception.Message)" -ForegroundColor Red
-    Read-Host 'Appuie sur Entree pour fermer'
     exit 1
 }
