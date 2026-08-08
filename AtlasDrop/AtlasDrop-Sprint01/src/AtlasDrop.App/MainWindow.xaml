@@ -24,8 +24,8 @@
 
         <Border Grid.Row="1" Background="White" BorderBrush="#D5DBE5" BorderThickness="1" CornerRadius="9" Padding="12" Margin="0,14,0,8">
             <StackPanel>
-                <TextBlock Text="3 dossiers proposés" Foreground="#657089" FontWeight="SemiBold"/>
-                <ListBox x:Name="SuggestionList" Margin="0,7,0,0" MinHeight="90" MaxHeight="150"
+                <TextBlock Text="Dossier proposé" Foreground="#657089" FontWeight="SemiBold"/>
+                <ListBox x:Name="SuggestionList" Visibility="Collapsed"
                          SelectionChanged="OnSuggestionSelected" DisplayMemberPath="DisplayText"/>
                 <TextBlock x:Name="ProposedPathText" Text="—" FontSize="15" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,7,0,0"/>
                 <TextBlock x:Name="ConfidenceText" Text="" Foreground="#657089" Margin="0,4,0,0" TextWrapping="Wrap"/>
