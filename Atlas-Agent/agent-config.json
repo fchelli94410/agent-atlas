@@ -1,0 +1,8 @@
+{
+  "pollSeconds": 30,
+  "stableSeconds": 10,
+  "maxPackageBytes": 524288000,
+  "maxBackups": 3,
+  "atlasDropInstallPath": "%LOCALAPPDATA%\\AtlasDrop\\app",
+  "allowedSteps": ["restore", "build", "test", "self-test"]
+}
