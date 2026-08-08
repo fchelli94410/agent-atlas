@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using AtlasDrop.Core.Logging;
 using AtlasDrop.Infrastructure.Updates;
+using Xunit;
 
 namespace AtlasDrop.Tests;
 
