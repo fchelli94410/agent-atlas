@@ -1,4 +1,4 @@
-# Agent Atlas v1.1
+# Agent Atlas v1.1.1
 
 Agent Windows autonome de validation, installation et restauration d’Atlas Drop.
 
