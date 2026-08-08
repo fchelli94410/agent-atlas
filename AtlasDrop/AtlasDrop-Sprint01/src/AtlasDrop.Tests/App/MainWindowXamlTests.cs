@@ -14,11 +14,13 @@ public sealed class MainWindowXamlTests
             if (File.Exists(candidate)) return candidate;
             current = current.Parent;
         }
+
         throw new FileNotFoundException(name + " introuvable.");
     }
 
     [Fact]
-    public void Main_window_xaml_is_valid_xml() => Assert.Equal("Window", XDocument.Load(FindFile("MainWindow.xaml")).Root!.Name.LocalName);
+    public void Main_window_xaml_is_valid_xml() =>
+        Assert.Equal("Window", XDocument.Load(FindFile("MainWindow.xaml")).Root!.Name.LocalName);
 
     [Theory]
     [InlineData("YesButton")]
@@ -27,53 +29,42 @@ public sealed class MainWindowXamlTests
     [InlineData("CancelButton")]
     [InlineData("MoveHereButton")]
     [InlineData("ProposedPathText")]
-    [InlineData("FolderTree")]
+    [InlineData("ExplorerRefinementPanel")]
+    [InlineData("TrackedExplorerDestinationText")]
     [InlineData("StatusText")]
     public void Validated_workflow_controls_exist(string controlName)
     {
         var document = XDocument.Load(FindFile("MainWindow.xaml"));
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
-        Assert.Contains(document.Descendants(), e => (string?)e.Attribute(x + "Name") == controlName);
+        Assert.Contains(
+            document.Descendants(),
+            element => (string?)element.Attribute(x + "Name") == controlName);
     }
 
     [Fact]
-    public void Manual_move_button_is_part_of_manual_mode()
+    public void Deposit_button_is_hidden_and_disabled_until_an_explorer_is_tracked()
+    {
+        var document = XDocument.Load(FindFile("MainWindow.xaml"));
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+        var button = Assert.Single(
+            document.Descendants()
+                .Where(element => (string?)element.Attribute(x + "Name") == "MoveHereButton"));
+
+        Assert.Equal("DÉPOSER ICI", (string?)button.Attribute("Content"));
+        Assert.Equal("Collapsed", (string?)button.Attribute("Visibility"));
+        Assert.Equal("False", (string?)button.Attribute("IsEnabled"));
+        Assert.Equal("OnMoveHere", (string?)button.Attribute("Click"));
+    }
+
+    [Fact]
+    public void Explorer_refinement_instructions_are_visible_in_the_dedicated_panel()
     {
         var text = File.ReadAllText(FindFile("MainWindow.xaml"));
-        Assert.Contains("DÉPLACER ICI", text, StringComparison.Ordinal);
-        Assert.Contains("OnMoveHere", text, StringComparison.Ordinal);
-    }
 
-    [Fact]
-    public void Manual_folder_tree_is_large_and_has_visible_vertical_scroll()
-    {
-        var document = XDocument.Load(FindFile("MainWindow.xaml"));
-        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
-        var tree = Assert.Single(
-            document.Descendants()
-                .Where(e => (string?)e.Attribute(x + "Name") == "FolderTree"));
-
-        Assert.Equal("300", (string?)tree.Attribute("MinHeight"));
-        Assert.Equal("15", (string?)tree.Attribute("FontSize"));
-        Assert.Equal(
-            "Visible",
-            (string?)tree.Attribute("ScrollViewer.VerticalScrollBarVisibility"));
-        Assert.Equal(
-            "Auto",
-            (string?)tree.Attribute("ScrollViewer.HorizontalScrollBarVisibility"));
-    }
-
-    [Fact]
-    public void Manual_search_results_show_relative_display_paths()
-    {
-        var document = XDocument.Load(FindFile("MainWindow.xaml"));
-        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
-        var results = Assert.Single(
-            document.Descendants()
-                .Where(e => (string?)e.Attribute(x + "Name") == "SearchResultsList"));
-
-        Assert.Equal("DisplayPath", (string?)results.Attribute("DisplayMemberPath"));
-        Assert.Equal("140", (string?)results.Attribute("MaxHeight"));
+        Assert.Contains("Affiner dans l’Explorateur", text, StringComparison.Ordinal);
+        Assert.Contains("Navigue dans la fenêtre Explorateur ouverte par Atlas Drop", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("SearchResultsList", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("FolderTree", text, StringComparison.Ordinal);
     }
 
     [Fact]
