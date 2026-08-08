@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Net.Http;
 using System.Windows;
 using AtlasDrop.Core.Integration;
 using AtlasDrop.Core.Logging;
