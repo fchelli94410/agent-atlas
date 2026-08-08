@@ -68,10 +68,27 @@ jobs:
           if ($fullHash -ne $manifest.sha256) { throw 'Corrupted public installer.' }
       - name: Silent install, update restart and uninstall
         shell: powershell
+        timeout-minutes: 8
         run: |
+          function Invoke-SetupProcess {
+            param(
+              [string]$Name,
+              [string]$FilePath,
+              [string[]]$Arguments
+            )
+            Write-Host "START: $Name"
+            $process = Start-Process -FilePath $FilePath -ArgumentList $Arguments -PassThru
+            if (-not $process.WaitForExit(90000)) {
+              try { $process.Kill() } catch {}
+              throw "$Name timed out after 90 seconds."
+            }
+            Write-Host "DONE: $Name, exit=$($process.ExitCode)"
+            if ($process.ExitCode -ne 0) { throw "$Name failed: $($process.ExitCode)" }
+          }
+
           $installer = Resolve-Path "installer\output\Installer-Atlas-Drop.exe"
-          $process = Start-Process -FilePath $installer -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -Wait -PassThru
-          if ($process.ExitCode -ne 0) { throw "Installation failed: $($process.ExitCode)" }
+          Invoke-SetupProcess -Name 'Initial installation' -FilePath $installer -Arguments @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART')
+
           $app = Join-Path $env:LOCALAPPDATA 'AtlasDrop\AtlasDrop.App.exe'
           if (-not (Test-Path -LiteralPath $app)) { throw 'Installed executable missing.' }
 
@@ -80,15 +97,13 @@ jobs:
           if ($null -eq (Get-Process -Name 'AtlasDrop.App' -ErrorAction SilentlyContinue)) { throw 'Atlas Drop did not stay running.' }
           Stop-Process -Name 'AtlasDrop.App' -Force
 
-          $update = Start-Process -FilePath $installer -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/CLOSEAPPLICATIONS','/UPDATE=1' -Wait -PassThru
-          if ($update.ExitCode -ne 0) { throw "Update failed: $($update.ExitCode)" }
+          Invoke-SetupProcess -Name 'Silent update' -FilePath $installer -Arguments @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/CLOSEAPPLICATIONS','/UPDATE=1')
           Start-Sleep -Seconds 5
           if ($null -eq (Get-Process -Name 'AtlasDrop.App' -ErrorAction SilentlyContinue)) { throw 'Updated Atlas Drop did not restart.' }
           Stop-Process -Name 'AtlasDrop.App' -Force
 
           $uninstaller = Join-Path $env:LOCALAPPDATA 'AtlasDrop\unins000.exe'
-          $uninstall = Start-Process -FilePath $uninstaller -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -Wait -PassThru
-          if ($uninstall.ExitCode -ne 0) { throw "Uninstall failed: $($uninstall.ExitCode)" }
+          Invoke-SetupProcess -Name 'Silent uninstall' -FilePath $uninstaller -Arguments @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART')
           if (Test-Path -LiteralPath $app) { throw 'Uninstall left the executable behind.' }
       - uses: actions/upload-artifact@v4
         with:
