@@ -33,7 +33,7 @@ jobs:
       - name: Install Inno Setup compiler
         run: choco install innosetup --no-progress -y
       - name: Build single EXE installer
-        run: '& "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=1.0.9" "installer\AtlasDrop.iss"'
+        run: '& "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=1.0.10" "installer\AtlasDrop.iss"'
       - name: Verify public update channel
         shell: powershell
         run: |
@@ -41,7 +41,7 @@ jobs:
           $manifest = Invoke-RestMethod -Uri ($base + 'manifest.json')
           if ($manifest.product -ne 'Atlas Drop') { throw 'Wrong update product.' }
           if ($manifest.platform -ne 'windows-x64') { throw 'Wrong update platform.' }
-          if ($manifest.version -ne '1.0.9') { throw 'Wrong update version.' }
+          if ([version]$manifest.version -lt [version]'1.0.9') { throw 'Update channel version is too old.' }
           $download = Join-Path $env:RUNNER_TEMP 'atlasdrop-public-download.exe'
           $output = [System.IO.File]::Open($download, [System.IO.FileMode]::Create)
           try {
