@@ -1,4 +1,4 @@
-# Cahier des charges — Agent Atlas v1.0
+# Cahier des charges — Agent Atlas v1.1
 
 ## 1. Objectif
 
@@ -19,6 +19,9 @@ Installer une seule fois sur Windows 11 un agent autonome limité à Atlas Drop.
 - Rapport lisible et journal technique dans `Reports`.
 - Quarantaine des paquets invalides ou échoués.
 - Une seule opération à la fois.
+- Connexion unique au dépôt GitHub privé par validation dans le navigateur.
+- Surveillance exclusive de `fchelli94410/agent-atlas`, branche `main`.
+- Aucun mot de passe ou jeton GitHub stocké dans les scripts ou journaux.
 
 ## 3. Hors périmètre
 
@@ -77,7 +80,7 @@ Le manifeste contient : version, nom du ZIP, SHA-256, exécutable attendu, comma
 - Journaux sans contenu de documents utilisateur.
 - Arrêt immédiat en cas d’ambiguïté.
 
-Pour une future source Internet, une signature numérique Authenticode ou une signature Ed25519 sera obligatoire. SHA-256 seul vérifie l’intégrité, pas l’identité de l’expéditeur.
+Le canal distant accepte uniquement le dépôt privé configuré après authentification GitHub locale. SHA-256 contrôle ensuite l’intégrité du paquet généré localement. Le jeton reste géré par GitHub CLI et n’est jamais écrit dans la configuration Atlas.
 
 ## 8. Critères d’acceptation
 
@@ -92,4 +95,4 @@ Pour une future source Internet, une signature numérique Authenticode ou une si
 
 ## 9. Limite réelle
 
-L’agent rend l’exécution et le diagnostic autonomes sur le PC. Il ne crée pas à lui seul un canal entre ChatGPT Work et Windows. Pour déposer automatiquement les futures versions, il faudra relier `Inbox` à une source synchronisée autorisée (par exemple un dossier OneDrive dédié ou un dépôt de versions signé).
+Après l’installation initiale et l’autorisation GitHub unique, l’agent surveille automatiquement `main`. Le test fonctionnel complet reste obligatoirement exécuté sous Windows 11 avant de déclarer la v1.1 validée sur le PC.
