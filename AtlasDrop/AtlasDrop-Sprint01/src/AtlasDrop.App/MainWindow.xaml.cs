@@ -117,6 +117,16 @@ public partial class MainWindow : Window
 
     public void SignalMiddleClickDetected() => StatusText.Text = "Clic détecté — analyse en cours…";
 
+    public void SignalMiddleClickResolutionFailed()
+    {
+        ResetOperation();
+        ItemNameText.Text = "Fichier non détecté";
+        ProposedPathText.Text = "—";
+        ConfidenceText.Text = "Aucun fichier n’a été déplacé.";
+        StatusText.Text = "Impossible d’identifier ce fichier. Réessaie ou utilise « Ranger avec Atlas Drop ».";
+        PositionTopRight();
+    }
+
     public async void ActivateFile(string filePath)
     {
         if (_busy || string.IsNullOrWhiteSpace(filePath)) return;
