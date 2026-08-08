@@ -189,4 +189,31 @@ public sealed class MainWindowExplorerRefinementTests
         Assert.Contains("info.WorkArea", code, StringComparison.Ordinal);
         Assert.Contains("new WindowInteropHelper(this).Handle", positioning, StringComparison.Ordinal);
     }
+    [Fact]
+    public void Automatic_search_is_restricted_to_the_five_authorized_root_folders()
+    {
+        var code = ReadCode();
+
+        Assert.Contains("01 - Immobilier", code, StringComparison.Ordinal);
+        Assert.Contains("02 - Activités Professionnelles", code, StringComparison.Ordinal);
+        Assert.Contains("03 - Finances personnelles", code, StringComparison.Ordinal);
+        Assert.Contains("04 - Quotidien", code, StringComparison.Ordinal);
+        Assert.Contains("05 - Projets", code, StringComparison.Ordinal);
+        Assert.Contains(
+            "current.Depth == 0 && !AllowedRootFolderNames.Contains(Path.GetFileName(child))",
+            code,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Destinations_outside_the_five_authorized_branches_are_rejected()
+    {
+        var code = ReadCode();
+
+        Assert.Contains("private bool IsAllowedDestination", code, StringComparison.Ordinal);
+        Assert.Contains("!IsAllowedDestination(destination)", code, StringComparison.Ordinal);
+        Assert.Contains("destinationDepth < 1", code, StringComparison.Ordinal);
+        Assert.Contains("folder-index-v112.json", code, StringComparison.Ordinal);
+    }
+
 }
