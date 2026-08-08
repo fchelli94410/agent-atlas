@@ -27,7 +27,8 @@
                 <TextBlock Text="Dossier proposé" Foreground="#657089" FontWeight="SemiBold"/>
                 <ListBox x:Name="SuggestionList" Visibility="Collapsed"
                          SelectionChanged="OnSuggestionSelected" DisplayMemberPath="DisplayText"/>
-                <TextBlock x:Name="ProposedPathText" Text="—" FontSize="15" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,7,0,0"\n                           Cursor="Hand" ToolTip="Ouvrir ce dossier dans l’Explorateur" MouseLeftButtonUp="OnProposedPathClicked"/>
+                <TextBlock x:Name="ProposedPathText" Text="—" FontSize="15" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,7,0,0"
+                           Cursor="Hand" ToolTip="Ouvrir ce dossier dans l’Explorateur" MouseLeftButtonUp="OnProposedPathClicked"/>
                 <TextBlock x:Name="ConfidenceText" Text="" Foreground="#657089" Margin="0,4,0,0" TextWrapping="Wrap"/>
             </StackPanel>
         </Border>
