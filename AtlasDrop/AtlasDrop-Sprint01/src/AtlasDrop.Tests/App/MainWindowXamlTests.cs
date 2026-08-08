@@ -47,8 +47,8 @@ public sealed class MainWindowXamlTests
         var document = XDocument.Load(FindFile("MainWindow.xaml"));
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
         var button = Assert.Single(
-            document.Descendants()
-                .Where(element => (string?)element.Attribute(x + "Name") == "MoveHereButton"));
+            document.Descendants(),
+            element => (string?)element.Attribute(x + "Name") == "MoveHereButton");
 
         Assert.Equal("DÉPOSER ICI", (string?)button.Attribute("Content"));
         Assert.Equal("Collapsed", (string?)button.Attribute("Visibility"));
