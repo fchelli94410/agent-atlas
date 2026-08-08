@@ -5,6 +5,11 @@ try {
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'agent-config.json') -Destination (Join-Path $testRoot 'Agent')
     $configPath = Join-Path $testRoot 'Agent\agent-config.json'
     $config = Get-Content $configPath -Raw | ConvertFrom-Json
+    if ($config.githubEnabled -ne $false) { throw 'GitHub doit etre desactive avant autorisation.' }
+    if ([string]$config.githubRepository -ne 'fchelli94410/agent-atlas') { throw 'Depot GitHub inattendu.' }
+    foreach ($requiredFile in @('Connecter-GitHub-Agent-Atlas.ps1','CONNECTER-GITHUB-AGENT-ATLAS.cmd')) {
+        if (-not (Test-Path -LiteralPath (Join-Path $PSScriptRoot $requiredFile) -PathType Leaf)) { throw "Fichier absent : $requiredFile" }
+    }
     $config.stableSeconds = 0
     $config | ConvertTo-Json -Depth 4 | Set-Content $configPath -Encoding UTF8
 
