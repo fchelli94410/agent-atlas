@@ -182,8 +182,12 @@ public partial class MainWindow : Window
 
     private async Task LoadDeepFoldersForManualSearchAsync()
     {
-        await Task.Run(() => EnumerateFoldersSafe(_options.OneDriveRoot, Math.Max(_options.MaxSuggestedDepth, 12)));
-        await Dispatcher.InvokeAsync(() => LearningStatusText.Text = "Recherche manuelle complète disponible");
+        var folders = await Task.Run(() => EnumerateFoldersSafe(_options.OneDriveRoot, MaxDepth));
+        await Dispatcher.InvokeAsync(() =>
+        {
+            _folders = folders;
+            LearningStatusText.Text = "Navigation OneDrive disponible du niveau 1 au niveau 4";
+        });
     }
 
     private async Task<AnalysisSnapshot> AnalyzeItemAsync(string path)
@@ -292,7 +296,7 @@ public partial class MainWindow : Window
     {
         if (SuggestionList.SelectedItem is not SuggestionOption option) return;
         _proposedFolder = option.FullPath;
-        ProposedPathText.Text = option.FullPath;
+        ProposedPathText.Text = ToOneDriveDisplayPath(option.FullPath);
         ConfidenceText.Text = $"Confiance {option.Score:P0} — {option.Reason}";
         YesButton.IsEnabled = true;
         OpenExplorer(option.FullPath);
@@ -341,26 +345,31 @@ public partial class MainWindow : Window
         if (string.IsNullOrWhiteSpace(_proposedFolder)) return;
         var parent = Directory.GetParent(_proposedFolder)?.FullName;
         _proposedFolder = !string.IsNullOrWhiteSpace(parent) && IsUnderRoot(parent) ? parent : _oneDriveRoot;
-        ProposedPathText.Text = _proposedFolder;
+        ProposedPathText.Text = ToOneDriveDisplayPath(_proposedFolder);
         ConfidenceText.Text = "Proposition remontée d’un niveau. Aucun déplacement effectué.";
         OpenExplorer(_proposedFolder);
     }
 
-    private void OnChoose(object sender, RoutedEventArgs e)
+    private void OnChoose(object sender, RoutedEventArgs e) => EnterManualSelectionMode();
+
+    private void EnterManualSelectionMode()
     {
         BuildFolderTree();
+        SuggestionPanel.Visibility = Visibility.Collapsed;
+        RenamePanel.Visibility = Visibility.Collapsed;
         ManualPanel.Visibility = Visibility.Visible;
         DecisionButtons.Visibility = Visibility.Collapsed;
         MoveHereButton.Visibility = Visibility.Visible;
-        Height = 780;
+        ExpandForManualSelection();
     }
 
     private void OnFolderSelected(object sender, RoutedPropertyChangedEventArgs<object> e)
     {
         if (e.NewValue is not TreeViewItem item || item.Tag is not string path) return;
         _manualFolder = path;
-        SelectedManualDestinationText.Text = path;
-        ProposedPathText.Text = path;
+        var displayPath = ToOneDriveDisplayPath(path);
+        SelectedManualDestinationText.Text = displayPath;
+        ProposedPathText.Text = displayPath;
         ConfidenceText.Text = "Dossier choisi manuellement — clique DÉPLACER ICI pour confirmer.";
         OpenExplorer(path);
     }
@@ -388,9 +397,11 @@ public partial class MainWindow : Window
     {
         var terms = Tokenize(SearchTextBox.Text);
         var results = _folders
+            .Where(x => IsUnderRoot(x.Path) && GetDepth(_oneDriveRoot, x.Path) is >= 1 and <= MaxDepth)
             .Where(x => terms.Count == 0 || terms.All(t => x.Path.Contains(t, StringComparison.OrdinalIgnoreCase)))
             .OrderBy(x => x.Path.Length)
             .Take(50)
+            .Select(x => new ManualFolderOption(x.Path, ToOneDriveDisplayPath(x.Path)))
             .ToArray();
         SearchResultsList.ItemsSource = results;
         if (results.Length == 0) StatusText.Text = "Aucun dossier trouvé.";
@@ -399,22 +410,30 @@ public partial class MainWindow : Window
 
     private void OnManualSearchResultSelected(object sender, SelectionChangedEventArgs e)
     {
-        if (SearchResultsList.SelectedItem is not FolderEntry result) return;
-        _manualFolder = result.Path;
-        SelectedManualDestinationText.Text = result.Path;
-        ProposedPathText.Text = result.Path;
-        OpenExplorer(result.Path);
+        if (SearchResultsList.SelectedItem is not ManualFolderOption result) return;
+        _manualFolder = result.FullPath;
+        SelectedManualDestinationText.Text = result.DisplayPath;
+        ProposedPathText.Text = result.DisplayPath;
+        OpenExplorer(result.FullPath);
     }
 
     private async void OnCreateFolderClicked(object sender, RoutedEventArgs e)
     {
         var parent = _manualFolder ?? _oneDriveRoot;
+        if (GetDepth(_oneDriveRoot, parent) >= MaxDepth)
+        {
+            StatusText.Text = "Profondeur maximale atteinte : 4 niveaux sous OneDrive.";
+            return;
+        }
+
         var request = new FolderCreationRequest(_oneDriveRoot, parent, NewFolderNameTextBox.Text);
         var result = await _folderCreationService.CreateAsync(request);
         StatusText.Text = result.Message;
         if (!result.Success || string.IsNullOrWhiteSpace(result.FullPath)) return;
         _manualFolder = result.FullPath;
-        SelectedManualDestinationText.Text = result.FullPath;
+        var displayPath = ToOneDriveDisplayPath(result.FullPath);
+        SelectedManualDestinationText.Text = displayPath;
+        ProposedPathText.Text = displayPath;
         _folders.Add(new FolderEntry(result.FullPath, GetDepth(_oneDriveRoot, result.FullPath), Tokenize(result.FullPath)));
         BuildFolderTree();
     }
@@ -562,10 +581,7 @@ public partial class MainWindow : Window
             SaveLastMove(move, "REJECTED_AND_RESTORED");
             IsEnabled = true;
             PostMovePanel.Visibility = Visibility.Collapsed;
-            RenamePanel.Visibility = Directory.Exists(restored) ? Visibility.Collapsed : Visibility.Visible;
-            BuildFolderTree();
-            ManualPanel.Visibility = Visibility.Visible;
-            MoveHereButton.Visibility = Visibility.Visible;
+            EnterManualSelectionMode();
             StatusText.Text = "Classement annulé et source restaurée. Choisis le bon dossier.";
             OpenExplorer(Path.GetDirectoryName(restored) ?? _oneDriveRoot);
         }
@@ -592,10 +608,13 @@ public partial class MainWindow : Window
     private void BuildFolderTree()
     {
         FolderTree.Items.Clear();
-        var root = NewTreeItem(_oneDriveRoot);
+        var root = NewTreeItem(_oneDriveRoot, "OneDrive");
         FolderTree.Items.Add(root);
         var byPath = new Dictionary<string, TreeViewItem>(StringComparer.OrdinalIgnoreCase) { [_oneDriveRoot] = root };
-        foreach (var folder in _folders.OrderBy(x => x.Depth).ThenBy(x => x.Path))
+        foreach (var folder in _folders
+                     .Where(x => IsUnderRoot(x.Path) && GetDepth(_oneDriveRoot, x.Path) is >= 1 and <= MaxDepth)
+                     .OrderBy(x => x.Depth)
+                     .ThenBy(x => x.Path))
         {
             var item = NewTreeItem(folder.Path); byPath[folder.Path] = item;
             var parent = Directory.GetParent(folder.Path)?.FullName;
@@ -632,10 +651,17 @@ public partial class MainWindow : Window
         return result;
     }
 
-    private static int GetDepth(string root, string path) =>
-        Path.GetRelativePath(root, path).Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Length;
+    private static int GetDepth(string root, string path)
+    {
+        var relative = Path.GetRelativePath(root, path);
+        if (string.IsNullOrWhiteSpace(relative) || relative == ".") return 0;
+        return relative.Split(
+            new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar },
+            StringSplitOptions.RemoveEmptyEntries).Length;
+    }
 
-    private static TreeViewItem NewTreeItem(string path) => new() { Header = Path.GetFileName(path), Tag = path };
+    private static TreeViewItem NewTreeItem(string path, string? header = null) =>
+        new() { Header = header ?? Path.GetFileName(path), Tag = path };
 
     private List<FolderEntry> LoadOrBuildIndex()
     {
@@ -861,6 +887,32 @@ public partial class MainWindow : Window
         Left = area.Right - Width - 12; Top = area.Top + 8;
     }
 
+    private void ExpandForManualSelection()
+    {
+        var area = SystemParameters.WorkArea;
+        var availableWidth = Math.Max(MinWidth, area.Width - 24);
+        var availableHeight = Math.Max(MinHeight, area.Height - 16);
+        Width = Math.Min(availableWidth, Math.Max(760, area.Width * .58));
+        Height = Math.Min(availableHeight, Math.Max(760, area.Height * .90));
+        Left = area.Right - Width - 12;
+        Top = area.Top + 8;
+    }
+
+    private string ToOneDriveDisplayPath(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || !IsUnderRoot(path))
+            return Path.GetFileName(path);
+
+        var relative = Path.GetRelativePath(_oneDriveRoot, path);
+        if (string.IsNullOrWhiteSpace(relative) || relative == ".")
+            return "OneDrive";
+
+        var segments = relative.Split(
+            new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar },
+            StringSplitOptions.RemoveEmptyEntries);
+        return "OneDrive › " + string.Join(" › ", segments);
+    }
+
     private void ResetOperation()
     {
         _closeTimer.Stop();
@@ -869,11 +921,13 @@ public partial class MainWindow : Window
         ItemNameText.Text = "En attente d’un clic molette…"; ProposedPathText.Text = "—"; ConfidenceText.Text = "";
         RenameTextBox.Text = ""; AutoRenameStatusText.Text = ""; AutoRenameCheckBox.IsChecked = false;
         ManualPanel.Visibility = Visibility.Collapsed; PostMovePanel.Visibility = Visibility.Collapsed;
+        SuggestionPanel.Visibility = Visibility.Visible;
         DecisionButtons.Visibility = Visibility.Visible; MoveHereButton.Visibility = Visibility.Collapsed; RenamePanel.Visibility = Visibility.Visible;
         YesButton.IsEnabled = false; IsEnabled = true;
     }
 
     public sealed record FolderEntry(string Path, int Depth, HashSet<string> Tokens);
+    public sealed record ManualFolderOption(string FullPath, string DisplayPath);
     public sealed record SuggestionOption(string FullPath, double Score, string Reason)
     {
         public string DisplayText => $"{Score:P0} — {FullPath}";
