@@ -26,23 +26,12 @@ public sealed class ManualSearchArrayRegressionTests
     }
 
     [Fact]
-    public void Manual_search_array_uses_length_not_count_method_group()
+    public void Obsolete_manual_search_array_is_removed()
     {
         var code = File.ReadAllText(FindFile());
 
-        Assert.Contains(
-            "if (results.Length == 0)",
-            code,
-            StringComparison.Ordinal);
-
-        Assert.Contains(
-            "{results.Length} dossier(s)",
-            code,
-            StringComparison.Ordinal);
-
-        Assert.DoesNotContain(
-            "if (results.Count == 0)",
-            code,
-            StringComparison.Ordinal);
+        Assert.DoesNotContain("RunManualSearch", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("SearchResultsList", code, StringComparison.Ordinal);
+        Assert.Contains("TryGetExplorerPathByHwnd", code, StringComparison.Ordinal);
     }
 }
