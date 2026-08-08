@@ -266,6 +266,7 @@ public partial class MainWindow : Window
             .ToArray();
         var dates = _dateDetection.Detect(combined);
         var tokens = Tokenize(combined).Where(x => !x.Equals("document", StringComparison.OrdinalIgnoreCase)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        ExpandBusinessTokens(tokens);
         var years = dates.Where(x => x.Value is not null).Select(x => x.Value!.Value.Year).Distinct().ToArray();
         var fallbackLabel = _classification.Type != DocumentType.Unknown ? _classification.Type.ToString() : "Document";
         if (fallbackLabel != "Document") tokens.Add(fallbackLabel);
@@ -309,8 +310,11 @@ public partial class MainWindow : Window
                     .Select(token => _learning[LearningKey(token, folder.Path)])
                     .ToArray();
                 var learned = learnedValues.Length == 0 ? 0d : learnedValues.Average();
-                var score = Math.Clamp(scored.Score + learned * 0.03, 0d, 1d);
-                var reason = scored.Reasons.FirstOrDefault() ?? "correspondance du dossier";
+                var thematicBoost = GetThematicBoost(analysis.Tokens, folder.Tokens);
+                var score = Math.Clamp(scored.Score + learned * 0.03 + thematicBoost, 0d, 1d);
+                var reason = thematicBoost > 0d
+                    ? "correspondance thématique du dossier"
+                    : scored.Reasons.FirstOrDefault() ?? "correspondance du dossier";
                 return new SuggestionOption(folder.Path, score, reason);
             })
             .Where(x => x.Score >= 0.30)
@@ -877,6 +881,33 @@ public partial class MainWindow : Window
     {
         if (!Directory.Exists(path) || !IsUnderRoot(path)) return false;
         return GetDepth(_oneDriveRoot, path) is 0 or 1;
+    }
+
+    private static double GetThematicBoost(
+        IReadOnlySet<string> documentTokens,
+        IReadOnlySet<string> folderTokens)
+    {
+        var health = documentTokens.Contains("santé") || documentTokens.Contains("sante");
+        var healthFolder = folderTokens.Contains("santé") || folderTokens.Contains("sante");
+        return health && healthFolder ? 0.25d : 0d;
+    }
+
+    private static void ExpandBusinessTokens(HashSet<string> tokens)
+    {
+        var healthTerms = new HashSet<string>(
+            new[]
+            {
+                "ordonnance", "biologie", "laboratoire", "analyse", "analyses",
+                "medical", "médical", "medecin", "médecin", "sante", "santé"
+            },
+            StringComparer.OrdinalIgnoreCase);
+        if (tokens.Overlaps(healthTerms))
+        {
+            tokens.Add("santé");
+            tokens.Add("sante");
+            tokens.Add("médical");
+            tokens.Add("medical");
+        }
     }
 
     private static bool IsGenericFolder(string name) => name.Trim().ToLowerInvariant() is "divers" or "documents" or "fichiers" or "temp" or "tmp" or "autres";
