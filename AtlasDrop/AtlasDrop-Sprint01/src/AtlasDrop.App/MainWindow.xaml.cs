@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Threading;
 using AtlasDrop.Analysis.Classification;
 using AtlasDrop.Analysis.Companies;
@@ -16,10 +17,16 @@ using AtlasDrop.Analysis.Pdf;
 using AtlasDrop.Analysis.Places;
 using AtlasDrop.Analysis.Text;
 using AtlasDrop.Core.Analysis;
+using AtlasDrop.Core.Configuration;
+using AtlasDrop.Core.FileSystem;
+using AtlasDrop.Core.Learning;
 using AtlasDrop.Core.Naming;
+using AtlasDrop.Core.Notifications;
 using AtlasDrop.Core.Suggestions;
 using AtlasDrop.Infrastructure.FileSystem;
+using AtlasDrop.Infrastructure.Learning;
 using AtlasDrop.Infrastructure.Notifications;
+using AtlasDrop.FileOperations;
 using AtlasDrop.Search.Normalization;
 using AtlasDrop.Search.Suggestions;
 
@@ -39,9 +46,17 @@ public partial class MainWindow : Window
     private readonly FileRenameSuggestionService _renameService = new();
     private readonly HighConfidenceAutoRenamePolicy _autoRenamePolicy = new();
     private readonly WindowsFileNamePolicy _fileNamePolicy = new();
+    private readonly WindowsPathLengthPolicy _pathLengthPolicy = new();
+    private readonly SafeFolderCreationService _folderCreationService = new();
+    private readonly SafeFileMoveService _moveService = new();
+    private readonly InMemoryLearningSettingsService _learningSettings = new();
+    private readonly LocalLearningService _learningService = new(new InMemoryLearningRepository());
+    private readonly InactivityReminderPolicy _reminderPolicy = new(TimeSpan.FromMinutes(2));
+    private readonly DispatcherTimer _reminderTimer = new() { Interval = TimeSpan.FromSeconds(10) };
     private readonly FolderScoringService _folderScoring = new(new TextNormalizer(), MaxDepth);
     private readonly string _oneDriveRoot;
     private readonly string _stateDirectory;
+    private AtlasDropOptions _options = new();
     private List<FolderEntry> _folders = new();
     private List<SuggestionOption> _suggestions = new();
     private Dictionary<string, int> _learning = new(StringComparer.OrdinalIgnoreCase);
@@ -49,18 +64,34 @@ public partial class MainWindow : Window
     private string? _proposedFolder;
     private string? _manualFolder;
     private AnalysisSnapshot? _analysis;
+    private DocumentClassificationResult _classification = new(DocumentType.Unknown, 0d, Array.Empty<string>());
     private PendingMove? _pendingMove;
     private bool _busy;
+    private bool _isUserTyping;
+    private DateTime _lastActivityUtc = DateTime.UtcNow;
+    private bool _reminderShown;
     private FileSystemWatcher? _indexWatcher;
 
     public MainWindow()
     {
         InitializeComponent();
         _oneDriveRoot = FindOneDriveRoot();
+        _options = new AtlasDropOptions { OneDriveRoot = _oneDriveRoot, MaxSuggestedDepth = MaxDepth };
         _stateDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AtlasDrop");
         Directory.CreateDirectory(_stateDirectory);
         LoadLearning();
         _folders = LoadOrBuildIndex();
+        SearchButton.Click += OnSearchClicked;
+        SearchTextBox.KeyDown += OnSearchTextBoxKeyDown;
+        SearchTextBox.TextChanged += OnUserTextChanged;
+        RenameTextBox.TextChanged += OnUserTextChanged;
+        CreateFolderButton.Click += OnCreateFolderClicked;
+        LearningEnabledCheckBox.Checked += OnLearningEnabledChanged;
+        LearningEnabledCheckBox.Unchecked += OnLearningEnabledChanged;
+        ResetLearningButton.Click += OnResetLearningClicked;
+        _reminderTimer.Tick += OnReminderTick;
+        _reminderTimer.Start();
+        _feedback.PlayLaunchSound();
         _closeTimer.Tick += (_, _) => { _closeTimer.Stop(); Hide(); ResetOperation(); };
         _indexRefreshTimer.Tick += async (_, _) =>
         {
@@ -86,16 +117,20 @@ public partial class MainWindow : Window
 
     public void SignalMiddleClickDetected() => StatusText.Text = "Clic détecté — analyse en cours…";
 
-    public async void ActivateFile(string path)
+    public async void ActivateFile(string filePath)
     {
-        if (_busy || string.IsNullOrWhiteSpace(path)) return;
-        var fullPath = Path.GetFullPath(path);
+        if (_busy || string.IsNullOrWhiteSpace(filePath)) return;
+        var fullPath = Path.GetFullPath(filePath);
         if (!File.Exists(fullPath) && !Directory.Exists(fullPath)) return;
 
         _busy = true;
         _activePath = fullPath;
+        _lastActivityUtc = DateTime.UtcNow;
+        _reminderShown = false;
         _pendingMove = null;
         ItemNameText.Text = Path.GetFileName(fullPath);
+        var FileNameText = ItemNameText;
+        FileNameText.Text = Path.GetFileName(fullPath);
         ManualPanel.Visibility = Visibility.Collapsed;
         PostMovePanel.Visibility = Visibility.Collapsed;
         DecisionButtons.Visibility = Visibility.Visible;
@@ -104,7 +139,10 @@ public partial class MainWindow : Window
         StatusText.Text = "Analyse en cours…";
         Show(); Activate(); PositionTopRight();
 
-        _analysis = await AnalyzeItemAsync(fullPath);
+        await AnalyzeActiveFileAsync();
+        await LoadAutomaticFolderCandidatesAsync();
+        _ = LoadDeepFoldersForManualSearchAsync();
+        if (_analysis is null) return;
         _suggestions = BuildSuggestions(_analysis);
         SuggestionList.ItemsSource = _suggestions;
         SuggestionList.SelectedIndex = _suggestions.Count > 0 ? 0 : -1;
@@ -119,6 +157,23 @@ public partial class MainWindow : Window
 
         PrepareRename(fullPath, _analysis, _suggestions.FirstOrDefault());
         StatusText.Text = "Valide explicitement avant tout déplacement.";
+    }
+
+    private async Task AnalyzeActiveFileAsync()
+    {
+        if (_activePath is null) return;
+        _analysis = await AnalyzeItemAsync(_activePath);
+    }
+
+    private async Task LoadAutomaticFolderCandidatesAsync()
+    {
+        _folders = await Task.Run(() => EnumerateFoldersToDepth(_options.OneDriveRoot, _options.MaxSuggestedDepth));
+    }
+
+    private async Task LoadDeepFoldersForManualSearchAsync()
+    {
+        await Task.Run(() => EnumerateFoldersSafe(_options.OneDriveRoot, Math.Max(_options.MaxSuggestedDepth, 12)));
+        await Dispatcher.InvokeAsync(() => LearningStatusText.Text = "Recherche manuelle complète disponible");
     }
 
     private async Task<AnalysisSnapshot> AnalyzeItemAsync(string path)
@@ -159,6 +214,7 @@ public partial class MainWindow : Window
 
         var combined = string.Join(' ', fragments);
         var classification = _classificationService.Classify(Path.GetFileName(path), extractedText);
+        _classification = classification;
         var companies = _companyDetection.Detect(combined).Select(x => x.Name).ToList();
         var inferredCompany = DetectBusinessPhrase(combined);
         if (!string.IsNullOrWhiteSpace(inferredCompany) && !companies.Contains(inferredCompany, StringComparer.OrdinalIgnoreCase))
@@ -171,7 +227,7 @@ public partial class MainWindow : Window
         var dates = _dateDetection.Detect(combined);
         var tokens = Tokenize(combined).Where(x => !x.Equals("document", StringComparison.OrdinalIgnoreCase)).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var years = dates.Where(x => x.Value is not null).Select(x => x.Value!.Value.Year).Distinct().ToArray();
-        var fallbackLabel = classification.Type != DocumentType.Unknown ? classification.Type.ToString() : "Document";
+        var fallbackLabel = _classification.Type != DocumentType.Unknown ? _classification.Type.ToString() : "Document";
         if (fallbackLabel != "Document") tokens.Add(fallbackLabel);
 
         return new AnalysisSnapshot(combined, tokens, classification, places, companies, dates, years);
@@ -273,7 +329,6 @@ public partial class MainWindow : Window
     private void OnNo(object sender, RoutedEventArgs e)
     {
         if (string.IsNullOrWhiteSpace(_proposedFolder)) return;
-        RecordLearning(_proposedFolder, accepted: false);
         var parent = Directory.GetParent(_proposedFolder)?.FullName;
         _proposedFolder = !string.IsNullOrWhiteSpace(parent) && IsUnderRoot(parent) ? parent : _oneDriveRoot;
         ProposedPathText.Text = _proposedFolder;
@@ -294,12 +349,87 @@ public partial class MainWindow : Window
     {
         if (e.NewValue is not TreeViewItem item || item.Tag is not string path) return;
         _manualFolder = path;
+        SelectedManualDestinationText.Text = path;
         ProposedPathText.Text = path;
         ConfidenceText.Text = "Dossier choisi manuellement — clique DÉPLACER ICI pour confirmer.";
         OpenExplorer(path);
     }
 
     private async void OnMoveHere(object sender, RoutedEventArgs e) => await MoveAsync(_manualFolder);
+
+    private void OnSearchClicked(object sender, RoutedEventArgs e) => RunManualSearch();
+
+    private void OnSearchTextBoxKeyDown(object sender, KeyEventArgs e)
+    {
+        _isUserTyping = true;
+        _lastActivityUtc = DateTime.UtcNow;
+        if (e.Key == Key.Enter) RunManualSearch();
+    }
+
+    private void OnUserTextChanged(object sender, TextChangedEventArgs e)
+    {
+        _isUserTyping = true;
+        _lastActivityUtc = DateTime.UtcNow;
+        _reminderShown = false;
+        _ = Task.Delay(900).ContinueWith(_ => Dispatcher.BeginInvoke(() => _isUserTyping = false));
+    }
+
+    private void RunManualSearch()
+    {
+        var terms = Tokenize(SearchTextBox.Text);
+        var results = _folders
+            .Where(x => terms.Count == 0 || terms.All(t => x.Path.Contains(t, StringComparison.OrdinalIgnoreCase)))
+            .OrderBy(x => x.Path.Length)
+            .Take(50)
+            .ToArray();
+        SearchResultsList.ItemsSource = results;
+        if (results.Length == 0) StatusText.Text = "Aucun dossier trouvé.";
+        else StatusText.Text = $"{results.Length} dossier(s) trouvé(s).";
+    }
+
+    private void OnManualSearchResultSelected(object sender, SelectionChangedEventArgs e)
+    {
+        if (SearchResultsList.SelectedItem is not FolderEntry result) return;
+        _manualFolder = result.Path;
+        SelectedManualDestinationText.Text = result.Path;
+        ProposedPathText.Text = result.Path;
+        OpenExplorer(result.Path);
+    }
+
+    private async void OnCreateFolderClicked(object sender, RoutedEventArgs e)
+    {
+        var parent = _manualFolder ?? _oneDriveRoot;
+        var request = new FolderCreationRequest(_oneDriveRoot, parent, NewFolderNameTextBox.Text);
+        var result = await _folderCreationService.CreateAsync(request);
+        StatusText.Text = result.Message;
+        if (!result.Success || string.IsNullOrWhiteSpace(result.FullPath)) return;
+        _manualFolder = result.FullPath;
+        SelectedManualDestinationText.Text = result.FullPath;
+        _folders.Add(new FolderEntry(result.FullPath, GetDepth(_oneDriveRoot, result.FullPath), Tokenize(result.FullPath)));
+        BuildFolderTree();
+    }
+
+    private void OnLearningEnabledChanged(object sender, RoutedEventArgs e)
+    {
+        _learningSettings.SetEnabled(LearningEnabledCheckBox.IsChecked == true);
+        LearningStatusText.Text = _learningSettings.IsEnabled ? "Apprentissage actif" : "Apprentissage désactivé";
+    }
+
+    private async void OnResetLearningClicked(object sender, RoutedEventArgs e)
+    {
+        await _learningService.ClearAsync();
+        _learning.Clear();
+        try { File.Delete(Path.Combine(_stateDirectory, "learning-v108.json")); } catch { }
+        LearningStatusText.Text = "Apprentissage effacé";
+    }
+
+    private void OnReminderTick(object? sender, EventArgs e)
+    {
+        if (!_busy || !_reminderPolicy.ShouldRemind(DateTime.UtcNow, _lastActivityUtc, _isUserTyping, _reminderShown)) return;
+        _reminderShown = true;
+        _feedback.PlayReminderSound();
+        StatusText.Text = "Atlas Drop attend ta décision. Aucun déplacement n'a été effectué.";
+    }
 
     private void OnCancel(object sender, RoutedEventArgs e)
     {
@@ -335,6 +465,9 @@ public partial class MainWindow : Window
             }
 
             var requestedTarget = Path.Combine(destination, targetName);
+            var pathCheck = _pathLengthPolicy.CheckDestination(destination, targetName);
+            PathLengthStatusText.Text = pathCheck.Message;
+            if (!pathCheck.IsSafe) { StatusText.Text = pathCheck.Message; return; }
             var overwrite = false;
             string target;
             if (!sourceIsDirectory && File.Exists(requestedTarget))
@@ -352,11 +485,22 @@ public partial class MainWindow : Window
             var originalWrite = File.Exists(source) ? File.GetLastWriteTimeUtc(source) : DateTime.MinValue;
             StatusText.Text = "Déplacement sécurisé…";
             IsEnabled = false;
-            await Task.Run(() =>
+            if (sourceIsDirectory)
             {
-                if (Directory.Exists(source)) Directory.Move(source, target);
-                else File.Move(source, target, overwrite);
-            });
+                await Task.Run(() => Directory.Move(source, target));
+            }
+            else if (overwrite)
+            {
+                await Task.Run(() => File.Move(source, target, true));
+            }
+            else
+            {
+                var moveResult = await _moveService.MoveAsync(new SafeMoveRequest(
+                    _oneDriveRoot, source, destination, Path.GetFileName(target)));
+                if (!moveResult.Success || string.IsNullOrWhiteSpace(moveResult.DestinationPath))
+                    throw new IOException(moveResult.Message);
+                target = moveResult.DestinationPath;
+            }
             if (!File.Exists(target) && !Directory.Exists(target)) throw new IOException("Vérification du déplacement impossible.");
             if (File.Exists(target))
             {
@@ -450,6 +594,37 @@ public partial class MainWindow : Window
         root.IsExpanded = true;
     }
 
+    private List<FolderEntry> EnumerateFoldersToDepth(string root, int maxDepth) => EnumerateFoldersSafe(root, maxDepth);
+
+    private List<FolderEntry> EnumerateFoldersSafe(string root, int maxDepth)
+    {
+        var result = new List<FolderEntry>();
+        if (!Directory.Exists(root)) return result;
+        var queue = new Queue<(string Path, int Depth)>();
+        queue.Enqueue((root, 0));
+        while (queue.Count > 0)
+        {
+            var current = queue.Dequeue();
+            if (current.Depth >= maxDepth) continue;
+            try
+            {
+                foreach (var child in Directory.EnumerateDirectories(current.Path))
+                {
+                    var relative = Path.GetRelativePath(root, child);
+                    if (IsExcludedFolder(relative)) continue;
+                    var depth = current.Depth + 1;
+                    result.Add(new FolderEntry(child, depth, Tokenize(relative)));
+                    queue.Enqueue((child, depth));
+                }
+            }
+            catch { }
+        }
+        return result;
+    }
+
+    private static int GetDepth(string root, string path) =>
+        Path.GetRelativePath(root, path).Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Length;
+
     private static TreeViewItem NewTreeItem(string path) => new() { Header = Path.GetFileName(path), Tag = path };
 
     private List<FolderEntry> LoadOrBuildIndex()
@@ -527,6 +702,7 @@ public partial class MainWindow : Window
 
     private void RecordLearning(string folder, bool accepted)
     {
+        if (!_learningSettings.IsEnabled) return;
         var tokens = _analysis?.Tokens ?? Tokenize(Path.GetFileNameWithoutExtension(_activePath ?? string.Empty));
         foreach (var token in tokens.Take(16))
         {
