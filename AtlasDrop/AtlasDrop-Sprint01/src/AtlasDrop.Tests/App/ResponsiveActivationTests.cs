@@ -59,17 +59,22 @@ public sealed class ResponsiveActivationTests
     }
 
     [Fact]
-    public void Deep_folder_scan_runs_in_background()
+    public void Manual_refinement_uses_tracked_explorer_without_deep_scan()
     {
         var code = File.ReadAllText(FindFile());
 
-        Assert.Contains(
-            "_ = LoadDeepFoldersForManualSearchAsync()",
+        Assert.DoesNotContain(
+            "LoadDeepFoldersForManualSearchAsync",
             code,
             StringComparison.Ordinal);
 
         Assert.Contains(
-            "Recherche manuelle complète disponible",
+            "OpenExplorerAndTrackAsync",
+            code,
+            StringComparison.Ordinal);
+
+        Assert.Contains(
+            "private const int MaxDepth = 4;",
             code,
             StringComparison.Ordinal);
     }
