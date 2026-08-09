@@ -14,6 +14,19 @@
             <Setter Property="Margin" Value="4"/>
             <Setter Property="MinHeight" Value="40"/>
         </Style>
+        <Style x:Key="PrimaryDecisionButtonStyle" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Background" Value="#17803D"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="Opacity" Value="1"/>
+            <Style.Triggers>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Background" Value="#E5E7EB"/>
+                    <Setter Property="Foreground" Value="#4B5563"/>
+                    <Setter Property="BorderBrush" Value="#CBD5E1"/>
+                    <Setter Property="Opacity" Value="1"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
         <Style TargetType="TextBlock">
             <Setter Property="FontFamily" Value="Segoe UI"/>
             <Setter Property="Foreground" Value="#172033"/>
@@ -28,15 +41,15 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <DockPanel Grid.Row="0">
+        <DockPanel Grid.Row="0" LastChildFill="True">
+            <Button x:Name="RefreshSuggestionButton" DockPanel.Dock="Right"
+                    Content="↻  RELANCER" ToolTip="Relancer l’analyse et actualiser les dossiers"
+                    MinHeight="30" Padding="9,4" Margin="8,0,0,0"
+                    FontSize="11" VerticalAlignment="Top" Click="OnRefreshSuggestionClicked"/>
             <StackPanel>
                 <TextBlock Text="Atlas Drop" FontSize="23" FontWeight="Bold"/>
-                <Button x:Name="BackButton" Content="←  RETOUR"
-                        Visibility="Collapsed" HorizontalAlignment="Left"
-                        MinHeight="28" Padding="8,4" Margin="0,9,0,5"
-                        FontSize="11" Click="OnBack"/>
                 <TextBlock x:Name="ItemNameText" Text="En attente d’un clic molette…"
-                           FontSize="14" Margin="0,4,0,0" TextTrimming="CharacterEllipsis"/>
+                           Visibility="Collapsed"/>
             </StackPanel>
         </DockPanel>
 
@@ -75,8 +88,8 @@
         </Border>
 
         <Grid Grid.Row="2">
-            <Border x:Name="SuggestionPanel" Background="White" BorderBrush="#D5DBE5"
-                    BorderThickness="1" CornerRadius="9" Padding="14" Margin="0,2,0,10">
+            <Border x:Name="SuggestionPanel" Background="White" BorderBrush="#CBD5E1"
+                    BorderThickness="1.25" CornerRadius="9" Padding="14" Margin="0,2,0,10">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
@@ -84,10 +97,6 @@
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
                     <DockPanel Grid.Row="0">
-                        <Button x:Name="RefreshSuggestionButton" DockPanel.Dock="Right"
-                                Content="↻  RELANCER" ToolTip="Relancer l’analyse et actualiser les dossiers"
-                                MinHeight="26" Padding="7,2" Margin="6,0,0,0"
-                                FontSize="11" Click="OnRefreshSuggestionClicked"/>
                         <Border x:Name="ConfidenceBadge" DockPanel.Dock="Right" Background="#E8F0FF"
                                 Margin="6,0,0,0" CornerRadius="10" Padding="8,3">
                             <TextBlock x:Name="ConfidenceLevelText" Text="EN ATTENTE"
@@ -98,9 +107,15 @@
                         <ListBox x:Name="SuggestionList" Visibility="Collapsed"
                                  SelectionChanged="OnSuggestionSelected" DisplayMemberPath="DisplayText"/>
                     </DockPanel>
-                    <TextBlock x:Name="ConfidenceText" Grid.Row="1" Text="" Foreground="#657089"
-                               Margin="0,8,0,0" TextWrapping="Wrap"/>
-                    <ScrollViewer x:Name="MainContentScrollViewer" Grid.Row="2" Margin="0,8,0,0"
+
+                    <Border x:Name="ConfidenceInfoPanel" Grid.Row="1"
+                            Background="#F8FAFC" BorderBrush="#CBD5E1" BorderThickness="0,0,0,1"
+                            Padding="10,8,10,10" Margin="-4,8,-4,0">
+                        <TextBlock x:Name="ConfidenceText" Text="" Foreground="#475569"
+                                   TextWrapping="Wrap"/>
+                    </Border>
+
+                    <ScrollViewer x:Name="MainContentScrollViewer" Grid.Row="2" Margin="0,11,0,0"
                                   VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Disabled">
                         <TreeView x:Name="FolderTree"
                                   Background="Transparent" BorderThickness="0"
@@ -253,8 +268,8 @@
 
             <UniformGrid x:Name="DecisionButtons" Columns="2" Margin="-3,0,-3,10">
                 <Button x:Name="YesButton" Content="C’EST EXACT" IsEnabled="False"
-                        Background="#17803D" Foreground="White" FontSize="12"
-                        Padding="3,8" Margin="3" Click="OnYes"/>
+                        Style="{StaticResource PrimaryDecisionButtonStyle}"
+                        FontSize="12" Padding="3,8" Margin="3" Click="OnYes"/>
                 <Button x:Name="CancelButton" Content="ANNULER" FontSize="12"
                         Padding="3,8" Margin="3" Click="OnCancel"/>
             </UniformGrid>
@@ -275,6 +290,10 @@
             <TextBlock x:Name="LearningStatusText" Foreground="#657089" TextAlignment="Center"/>
             <TextBlock x:Name="StatusText" Text="Atlas Drop fonctionne en arrière-plan." Margin="0,8,0,0"
                        TextAlignment="Center" Foreground="#657089" TextWrapping="Wrap"/>
+            <Button x:Name="BackButton" Content="←  RETOUR"
+                    Visibility="Collapsed" HorizontalAlignment="Left"
+                    MinHeight="28" Padding="8,4" Margin="0,9,0,0"
+                    FontSize="11" Click="OnBack"/>
         </StackPanel>
     </Grid>
 </Window>
