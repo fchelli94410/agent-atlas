@@ -42,7 +42,7 @@ namespace
             InterlockedIncrement(&g_objectCount);
         }
 
-        ~AtlasDropCommand() override
+        ~AtlasDropCommand()
         {
             InterlockedDecrement(&g_objectCount);
         }
