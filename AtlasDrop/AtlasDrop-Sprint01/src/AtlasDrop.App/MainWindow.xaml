@@ -78,6 +78,7 @@
                                   Background="Transparent" BorderThickness="0"
                                   ScrollViewer.VerticalScrollBarVisibility="Disabled"
                                   PreviewMouseWheel="OnFolderTreePreviewMouseWheel"
+                                  LayoutUpdated="OnFolderTreeLayoutUpdated"
                                   VirtualizingStackPanel.IsVirtualizing="True"
                                   VirtualizingStackPanel.VirtualizationMode="Recycling"/>
                     </ScrollViewer>
