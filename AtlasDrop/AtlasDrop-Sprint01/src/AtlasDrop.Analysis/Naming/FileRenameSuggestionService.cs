@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text;
 using System.Text.RegularExpressions;
 using AtlasDrop.Core.Analysis;
 using AtlasDrop.Core.FileSystem;
