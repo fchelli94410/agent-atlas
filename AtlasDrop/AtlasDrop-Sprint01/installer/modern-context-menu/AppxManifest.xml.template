@@ -13,7 +13,7 @@
     Name="AtlasDrop.ContextMenu"
     Publisher="CN=AtlasDrop"
     Version="__APP_VERSION__.0"
-    ProcessorArchitecture="neutral" />
+    ProcessorArchitecture="x64" />
 
   <Properties>
     <DisplayName>Atlas Drop</DisplayName>
