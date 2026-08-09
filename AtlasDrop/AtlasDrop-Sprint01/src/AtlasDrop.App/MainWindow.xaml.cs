@@ -900,9 +900,37 @@ public partial class MainWindow : Window
         UndoMoveButton.Content = $"ANNULER LE DÉPLACEMENT ({_undoSecondsRemaining} s)";
     }
 
-    private void OnBack(object sender, RoutedEventArgs e)
+    private async void OnBack(object sender, RoutedEventArgs e)
     {
-        if (_pendingMove is not null) return;
+        if (_pendingMove is not null)
+        {
+            _undoTimer.Stop();
+            var move = _pendingMove;
+            IsEnabled = false;
+            StatusText.Text = "Annulation du déplacement…";
+            try
+            {
+                var restored = await Task.Run(() => RestoreMove(move));
+                _pendingMove = null;
+                _activePath = restored;
+                SaveLastMove(move, "BACK_AND_RESTORED");
+                ItemNameText.Text = Path.GetFileName(restored);
+                PostMovePanel.Visibility = Visibility.Collapsed;
+                ExplainChoiceButton.IsEnabled = false;
+                ExplainChoiceButton.Content = "🎤 EXPLICATION VOCALE — DISPONIBLE APRÈS CLASSEMENT";
+            }
+            catch (Exception ex)
+            {
+                StatusText.Text = "Retour impossible : " + ex.Message;
+                IsEnabled = true;
+                return;
+            }
+            finally
+            {
+                IsEnabled = true;
+            }
+        }
+
         _explorerPathTimer.Stop();
         _trackedExplorerHwnd = null;
         _lockedSourcePath = null;
@@ -916,7 +944,7 @@ public partial class MainWindow : Window
         _compactExplorerMode = false;
         PositionTopRight();
         BackButton.Visibility = Visibility.Collapsed;
-        StatusText.Text = "Retour à la proposition. Aucun déplacement effectué.";
+        StatusText.Text = "Retour à la proposition. Déplacement annulé.";
     }
 
     private void OnWindowPreviewKeyDown(object sender, KeyEventArgs e)
@@ -1238,7 +1266,7 @@ public partial class MainWindow : Window
             LearningControlsPanel.Visibility = Visibility.Visible;
             _compactExplorerMode = false;
             PositionTopRight();
-            BackButton.Visibility = Visibility.Collapsed;
+            BackButton.Visibility = Visibility.Visible;
             _explorerPathTimer.Stop();
             _undoSecondsRemaining = 10;
             UndoMoveButton.Content = "ANNULER LE DÉPLACEMENT (10 s)";
