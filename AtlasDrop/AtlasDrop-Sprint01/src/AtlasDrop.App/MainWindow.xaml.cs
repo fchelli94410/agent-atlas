@@ -1870,12 +1870,12 @@ public partial class MainWindow : Window
         var workHeightDip = (area.Bottom - area.Top) / monitor.ScaleY;
         var preferredRightGapDip = workWidthDip >= MinWidth + 174 ? 150d : 12d;
         var maxWidthDip = Math.Max(MinWidth, workWidthDip - preferredRightGapDip - 24);
-        var maxHeightDip = Math.Max(MinHeight, workHeightDip - 16);
+        var maxHeightDip = Math.Max(MinHeight, workHeightDip - 28);
 
         Width = Math.Min(maxWidthDip, Math.Max(520, workWidthDip * .323));
         Height = _compactExplorerMode
             ? Math.Min(maxHeightDip, 330)
-            : Math.Min(maxHeightDip, Math.Max(620, workHeightDip * .82));
+            : Math.Min(maxHeightDip, Math.Max(680, workHeightDip * .94));
 
         var widthPixels = (int)Math.Round(Width * monitor.ScaleX);
         var heightPixels = (int)Math.Round(Height * monitor.ScaleY);
