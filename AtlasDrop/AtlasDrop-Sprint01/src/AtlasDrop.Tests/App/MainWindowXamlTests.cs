@@ -87,4 +87,22 @@ public sealed class MainWindowXamlTests
         Assert.Contains("x:Name=\"UndoMoveButton\"", text, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void Folder_tree_has_no_nested_vertical_scrollbar()
+    {
+        var text = File.ReadAllText(FindFile("MainWindow.xaml"));
+        Assert.Contains("ScrollViewer.VerticalScrollBarVisibility=\"Disabled\"", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("x:Name=\"FolderTree\" Margin=\"0,7,0,0\" MaxHeight", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Selected_destination_is_highlighted_above_the_tree()
+    {
+        var text = File.ReadAllText(FindFile("MainWindow.xaml"));
+        var label = text.IndexOf("DOSSIER CHOISI", StringComparison.Ordinal);
+        var tree = text.IndexOf("x:Name=\"FolderTree\"", StringComparison.Ordinal);
+        Assert.True(label >= 0 && label < tree);
+        Assert.Contains("x:Name=\"ProposedPathText\"", text, StringComparison.Ordinal);
+    }
+
 }

@@ -429,7 +429,7 @@ public partial class MainWindow : Window
     {
         if (SuggestionList.SelectedItem is not SuggestionOption option) return;
         _proposedFolder = option.FullPath;
-        ProposedPathText.Text = ToOneDriveTreeDisplayPath(option.FullPath);
+        ProposedPathText.Text = ToOneDriveDisplayPath(option.FullPath);
         var confidenceLevel = option.Score >= 0.70d ? "ÉLEVÉE" : option.Score >= 0.45d ? "MOYENNE" : "FAIBLE";
         ConfidenceLevelText.Text = confidenceLevel;
         ConfidenceBadge.Background = confidenceLevel == "ÉLEVÉE"
@@ -464,7 +464,8 @@ public partial class MainWindow : Window
             var parentPath = Path.GetDirectoryName(folder.Path) ?? _oneDriveRoot;
             if (!nodes.TryGetValue(parentPath, out var parent)) parent = rootItem;
             var node = NewTreeItem(folder.Path);
-            node.IsExpanded = true;
+            node.IsExpanded = !string.IsNullOrWhiteSpace(proposedFolder) &&
+                IsSameOrChild(proposedFolder, folder.Path);
             parent.Items.Add(node);
             nodes[folder.Path] = node;
         }
@@ -492,19 +493,32 @@ public partial class MainWindow : Window
 
     private TreeViewItem NewTreeItem(string path, string? header = null)
     {
+        var isProposed = PathsEqualSafe(path, _proposedFolder);
         var label = new TextBlock
         {
             Text = header ?? "📁  " + Path.GetFileName(path),
             Tag = path,
             Cursor = Cursors.Hand,
-            Padding = new Thickness(3, 2, 6, 2),
-            FontWeight = PathsEqualSafe(path, _proposedFolder) ? FontWeights.Bold : FontWeights.Normal,
-            Foreground = PathsEqualSafe(path, _proposedFolder)
+            Padding = new Thickness(5, 2, 7, 2),
+            FontWeight = isProposed ? FontWeights.Bold : FontWeights.Normal,
+            Foreground = isProposed
                 ? System.Windows.Media.Brushes.DarkGreen
                 : System.Windows.Media.Brushes.Black
         };
         label.MouseLeftButtonUp += OnFolderTreeNodeClicked;
-        return new TreeViewItem { Header = label, Tag = path };
+        var highlight = new Border
+        {
+            Background = isProposed
+                ? new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(236, 253, 243))
+                : System.Windows.Media.Brushes.Transparent,
+            BorderBrush = isProposed
+                ? new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(74, 222, 128))
+                : System.Windows.Media.Brushes.Transparent,
+            BorderThickness = isProposed ? new Thickness(1) : new Thickness(0),
+            CornerRadius = new CornerRadius(5),
+            Child = label
+        };
+        return new TreeViewItem { Header = highlight, Tag = path };
     }
 
     private async void OnFolderTreeNodeClicked(object sender, MouseButtonEventArgs e)
@@ -835,7 +849,7 @@ public partial class MainWindow : Window
         {
             _undoTimer.Stop();
             UndoMoveButton.IsEnabled = false;
-            UndoMoveButton.Content = "DÉLAI D’ANNULATION TERMINÉ";
+            UndoMoveButton.Visibility = Visibility.Collapsed;
             return;
         }
 
@@ -1173,6 +1187,8 @@ public partial class MainWindow : Window
             MoveHereButton.Visibility = Visibility.Collapsed;
             RenamePanel.Visibility = Visibility.Collapsed;
             PostMovePanel.Visibility = Visibility.Visible;
+            ExplainChoiceButton.IsEnabled = true;
+            ExplainChoiceButton.Content = "🎤 EXPLIQUER MON CHOIX";
             LearningControlsPanel.Visibility = Visibility.Visible;
             _compactExplorerMode = false;
             PositionTopRight();
@@ -1180,6 +1196,7 @@ public partial class MainWindow : Window
             _explorerPathTimer.Stop();
             _undoSecondsRemaining = 10;
             UndoMoveButton.Content = "ANNULER LE DÉPLACEMENT (10 s)";
+            UndoMoveButton.Visibility = Visibility.Visible;
             UndoMoveButton.IsEnabled = true;
             _undoTimer.Start();
             StatusText.Text = "Déplacement vérifié. Confirme maintenant le classement.";
@@ -1901,8 +1918,8 @@ public partial class MainWindow : Window
         _pendingVoiceExplanation = null;
         _compactExplorerMode = false;
         VoiceRulePanel.Visibility = Visibility.Collapsed;
-        ExplainChoiceButton.Content = "🎤 EXPLIQUER MON CHOIX";
-        ExplainChoiceButton.IsEnabled = true;
+        ExplainChoiceButton.Content = "🎤 EXPLICATION VOCALE — DISPONIBLE APRÈS CLASSEMENT";
+        ExplainChoiceButton.IsEnabled = false;
         _suggestions.Clear(); SuggestionList.ItemsSource = null; FolderTree.Items.Clear();
         ItemNameText.Text = "En attente d’un clic molette…"; ProposedPathText.Text = "—"; ConfidenceText.Text = "";
         TrackedExplorerDestinationText.Text = "Ouverture de l’Explorateur…";

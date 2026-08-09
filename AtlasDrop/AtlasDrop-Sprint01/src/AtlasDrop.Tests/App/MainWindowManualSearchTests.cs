@@ -299,4 +299,35 @@ public sealed class MainWindowExplorerRefinementTests
         Assert.DoesNotContain("api.openai.com", voice, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public void Only_the_selected_destination_path_is_expanded_and_highlighted()
+    {
+        var code = ReadCode();
+        var tree = MethodBlock(
+            code,
+            "private void BuildFolderDecisionTree",
+            "private string? GetBranchPath");
+        var item = MethodBlock(
+            code,
+            "private TreeViewItem NewTreeItem",
+            "private async void OnFolderTreeNodeClicked");
+
+        Assert.Contains("IsSameOrChild(proposedFolder, folder.Path)", tree, StringComparison.Ordinal);
+        Assert.DoesNotContain("node.IsExpanded = true", tree, StringComparison.Ordinal);
+        Assert.Contains("var isProposed = PathsEqualSafe(path, _proposedFolder)", item, StringComparison.Ordinal);
+        Assert.Contains("CornerRadius = new CornerRadius(5)", item, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Voice_learning_is_always_visible_but_enabled_only_after_a_move()
+    {
+        var code = ReadCode();
+        var xaml = File.ReadAllText(FindFile("MainWindow.xaml"));
+
+        Assert.Contains("EXPLICATION VOCALE — DISPONIBLE APRÈS CLASSEMENT", xaml, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"ExplainChoiceButton\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("ExplainChoiceButton.IsEnabled = true", code, StringComparison.Ordinal);
+        Assert.Contains("ExplainChoiceButton.IsEnabled = false", code, StringComparison.Ordinal);
+    }
+
 }
