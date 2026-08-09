@@ -10,7 +10,7 @@ public sealed class Sprint116RenameReliabilityTests
     private readonly FileRenameSuggestionService _service = new();
 
     [Fact]
-    public void Courrier_from_original_name_is_preserved_and_unrelated_letter_date_is_rejected()
+    public void Meaningful_letter_name_is_preserved_and_unrelated_ocr_date_is_rejected()
     {
         var context = new FileRenameContext(
             "courrier-d-adressage.pdf",
@@ -25,13 +25,15 @@ public sealed class Sprint116RenameReliabilityTests
 
         var suggestion = _service.Suggest(context);
 
-        Assert.StartsWith("courrier adressage", suggestion.ProposedFileName, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("1977-10-22", suggestion.ProposedFileName, StringComparison.Ordinal);
+        Assert.Equal("courrier-d-adressage.pdf", suggestion.ProposedFileName);
+        Assert.DoesNotContain("1977", suggestion.ProposedFileName);
+        Assert.DoesNotContain("Arles", suggestion.ProposedFileName, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Mssante", suggestion.ProposedFileName, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("date détectée ignorée", string.Join(' ', suggestion.Reasons), StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
-    public void Exact_date_is_kept_for_a_structured_invoice()
+    public void Meaningful_invoice_name_is_not_enriched_from_ocr_even_if_document_is_structured()
     {
         var context = new FileRenameContext(
             "facture-capex.pdf",
@@ -46,9 +48,8 @@ public sealed class Sprint116RenameReliabilityTests
 
         var suggestion = _service.Suggest(context);
 
-        Assert.Contains("capex", suggestion.ProposedFileName, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Facture", suggestion.ProposedFileName, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("2026-08-09", suggestion.ProposedFileName, StringComparison.Ordinal);
+        Assert.Equal("facture-capex.pdf", suggestion.ProposedFileName);
+        Assert.DoesNotContain("2026", suggestion.ProposedFileName);
     }
 
     [Fact]
@@ -67,11 +68,12 @@ public sealed class Sprint116RenameReliabilityTests
 
         var suggestion = _service.Suggest(context);
 
+        Assert.Equal("courrier-adressage.pdf", suggestion.ProposedFileName);
         Assert.DoesNotContain("1977", suggestion.ProposedFileName, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void Date_already_present_in_the_original_filename_is_preserved_even_for_a_letter()
+    public void Date_already_present_in_meaningful_original_filename_is_preserved_without_ocr_additions()
     {
         var context = new FileRenameContext(
             "2026-08-09-courrier-adressage.pdf",
@@ -79,14 +81,15 @@ public sealed class Sprint116RenameReliabilityTests
             new DateTime(2026, 8, 9),
             2026,
             8,
-            null,
-            null,
+            "Paris",
+            "Entreprise OCR",
             null,
             null);
 
         var suggestion = _service.Suggest(context);
 
-        Assert.Contains("2026-08-09", suggestion.ProposedFileName, StringComparison.Ordinal);
-        Assert.Contains("courrier", suggestion.ProposedFileName, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("2026-08-09-courrier-adressage.pdf", suggestion.ProposedFileName);
+        Assert.DoesNotContain("Paris", suggestion.ProposedFileName, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Entreprise OCR", suggestion.ProposedFileName, StringComparison.OrdinalIgnoreCase);
     }
 }
