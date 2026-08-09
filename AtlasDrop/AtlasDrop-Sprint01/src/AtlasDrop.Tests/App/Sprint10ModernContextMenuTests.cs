@@ -73,9 +73,12 @@ public sealed class Sprint10ModernContextMenuTests
         var installer = File.ReadAllText(FindRepositoryFile("installer", "AtlasDrop.iss"));
 
         Assert.Contains("Add-AppxPackage -Path $packagePathFull -ExternalLocation $externalLocationFull", register, StringComparison.Ordinal);
-        Assert.Contains("Cert:\\CurrentUser\\TrustedPeople", register, StringComparison.Ordinal);
+        Assert.Contains("Cert:\\LocalMachine\\TrustedPeople", register, StringComparison.Ordinal);
+        Assert.DoesNotContain("Cert:\\LocalMachine\\Root", register, StringComparison.Ordinal);
+        Assert.Contains("Cert:\\LocalMachine\\TrustedPeople", unregister, StringComparison.Ordinal);
         Assert.Contains("Get-AppxPackage -Name $packageName", unregister, StringComparison.Ordinal);
         Assert.Contains("Remove-AppxPackage", unregister, StringComparison.Ordinal);
+        Assert.Contains("PrivilegesRequired=admin", installer, StringComparison.Ordinal);
         Assert.Contains("Register-ModernContextMenu.ps1", installer, StringComparison.Ordinal);
         Assert.Contains("Unregister-ModernContextMenu.ps1", installer, StringComparison.Ordinal);
         Assert.DoesNotContain(".pfx", installer, StringComparison.OrdinalIgnoreCase);
