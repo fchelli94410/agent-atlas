@@ -35,7 +35,7 @@
         </DockPanel>
 
         <ScrollViewer x:Name="MainContentScrollViewer" Grid.Row="1"
-                      VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                      VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Disabled">
             <StackPanel>
                 <Border x:Name="SuggestionPanel" Background="White" BorderBrush="#D5DBE5"
                         BorderThickness="1" CornerRadius="9" Padding="13" Margin="0,14,0,10">
