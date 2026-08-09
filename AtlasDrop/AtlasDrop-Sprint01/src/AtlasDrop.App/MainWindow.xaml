@@ -134,26 +134,6 @@
                                     Background="#D97706" Foreground="White"
                                     Click="OnClassificationRejected"/>
                         </UniformGrid>
-                        <Button x:Name="ExplainChoiceButton" Content="🎤 EXPLIQUER MON CHOIX"
-                                Background="#6D28D9" Foreground="White"
-                                Click="OnExplainChoiceClicked"/>
-                        <Border x:Name="VoiceRulePanel" Visibility="Collapsed" Background="#F5F3FF"
-                                BorderBrush="#A78BFA" BorderThickness="1" CornerRadius="7"
-                                Padding="9" Margin="3">
-                            <StackPanel>
-                                <TextBlock x:Name="VoiceStatusText" Text="Écoute…"
-                                           Foreground="#5B21B6" FontWeight="SemiBold" TextWrapping="Wrap"/>
-                                <TextBlock x:Name="VoiceTranscriptText" Margin="0,5,0,0"
-                                           TextWrapping="Wrap"/>
-                                <TextBlock x:Name="VoiceRulePreviewText" Margin="0,5,0,0"
-                                           FontWeight="Bold" TextWrapping="Wrap"/>
-                                <UniformGrid Columns="2" Margin="-3,5,-3,0">
-                                    <Button Content="ENREGISTRER LA RÈGLE" Background="#17803D"
-                                            Foreground="White" Click="OnConfirmVoiceRuleClicked"/>
-                                    <Button Content="IGNORER" Click="OnCancelVoiceRuleClicked"/>
-                                </UniformGrid>
-                            </StackPanel>
-                        </Border>
                         <Button x:Name="UndoMoveButton" Content="ANNULER LE DÉPLACEMENT (10 s)"
                                 Background="#B91C1C" Foreground="White"
                                 Click="OnClassificationRejected"/>
@@ -162,7 +142,28 @@
             </StackPanel>
         </ScrollViewer>
 
-        <StackPanel Grid.Row="2" Margin="0,7,0,0">
+        <StackPanel Grid.Row="2" Margin="0,5,0,0">
+            <Button x:Name="ExplainChoiceButton"
+                    Content="🎤 EXPLICATION VOCALE — DISPONIBLE APRÈS CLASSEMENT"
+                    Background="#6D28D9" Foreground="White" IsEnabled="False"
+                    MinHeight="34" Padding="7,5" Margin="3,0,3,4"
+                    Click="OnExplainChoiceClicked"/>
+            <Border x:Name="VoiceRulePanel" Visibility="Collapsed" Background="#F5F3FF"
+                    BorderBrush="#A78BFA" BorderThickness="1" CornerRadius="7"
+                    Padding="8" Margin="3,0,3,4">
+                <StackPanel>
+                    <TextBlock x:Name="VoiceStatusText" Text="Écoute…"
+                               Foreground="#5B21B6" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                    <TextBlock x:Name="VoiceTranscriptText" Margin="0,4,0,0" TextWrapping="Wrap"/>
+                    <TextBlock x:Name="VoiceRulePreviewText" Margin="0,4,0,0"
+                               FontWeight="Bold" TextWrapping="Wrap"/>
+                    <UniformGrid Columns="2" Margin="-3,4,-3,0">
+                        <Button Content="ENREGISTRER LA RÈGLE" Background="#17803D"
+                                Foreground="White" Click="OnConfirmVoiceRuleClicked"/>
+                        <Button Content="IGNORER" Click="OnCancelVoiceRuleClicked"/>
+                    </UniformGrid>
+                </StackPanel>
+            </Border>
             <UniformGrid x:Name="DecisionButtons" Columns="2" Margin="-3,0,-3,4">
                 <Button x:Name="YesButton" Content="C’EST EXACT" IsEnabled="False"
                         Background="#17803D" Foreground="White" FontSize="12"
