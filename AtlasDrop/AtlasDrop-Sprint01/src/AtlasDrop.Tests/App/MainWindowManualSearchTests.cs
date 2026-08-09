@@ -38,21 +38,19 @@ public sealed class MainWindowExplorerRefinementTests
     }
 
     [Fact]
-    public void Obsolete_manual_tree_and_flat_search_menu_are_absent()
+    public void Direct_folder_tree_replaces_the_old_manual_search_menu()
     {
         var xaml = File.ReadAllText(FindFile("MainWindow.xaml"));
 
         Assert.DoesNotContain("ManualPanel", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("SearchResultsList", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("SearchTextBox", xaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("FolderTree", xaml, StringComparison.Ordinal);
+        Assert.Contains("FolderTree", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("CreateFolderButton", xaml, StringComparison.Ordinal);
     }
 
     [Theory]
     [InlineData("C’EST EXACT")]
-    [InlineData("BONNE BRANCHE")]
-    [InlineData("MAUVAIS DOSSIER")]
     [InlineData("ANNULER")]
     [InlineData("DÉPOSER DANS CE DOSSIER")]
     public void Decision_labels_match_the_validated_workflow(string label)
@@ -62,44 +60,32 @@ public sealed class MainWindowExplorerRefinementTests
     }
 
     [Fact]
-    public void Good_branch_opens_the_proposal_and_wrong_folder_opens_onedrive_root()
+    public void Tree_click_moves_to_a_folder_but_onedrive_root_only_opens_explorer()
     {
         var code = ReadCode();
-        var goodBranch = MethodBlock(
+        var click = MethodBlock(
             code,
-            "private async void OnNo",
-            "private async void OnChoose");
-        var wrongFolder = MethodBlock(
-            code,
-            "private async void OnChoose",
-            "private async Task EnterExplorerRefinementModeAsync");
+            "private async void OnFolderTreeNodeClicked",
+            "private async Task OpenDestinationBehindAsync");
 
-        Assert.Contains(
-            "await EnterExplorerRefinementModeAsync(_proposedFolder)",
-            goodBranch,
-            StringComparison.Ordinal);
-        Assert.Contains(
-            "await EnterExplorerRefinementModeAsync(_oneDriveRoot)",
-            wrongFolder,
-            StringComparison.Ordinal);
-        Assert.DoesNotContain("MoveAsync", goodBranch, StringComparison.Ordinal);
-        Assert.DoesNotContain("MoveAsync", wrongFolder, StringComparison.Ordinal);
+        Assert.Contains("PathsEqualSafe(destination, _oneDriveRoot)", click, StringComparison.Ordinal);
+        Assert.Contains("await EnterExplorerRefinementModeAsync(_oneDriveRoot)", click, StringComparison.Ordinal);
+        Assert.Contains("await ExecuteMoveOnceAsync(destination)", click, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void Proposed_folder_is_clickable_and_opens_without_moving()
+    public void The_selected_branch_tree_is_built_from_the_cached_folder_index()
     {
         var code = ReadCode();
         var xaml = File.ReadAllText(FindFile("MainWindow.xaml"));
-        var click = MethodBlock(
+        var tree = MethodBlock(
             code,
-            "private async void OnProposedPathClicked",
-            "private void PrepareRename");
+            "private void BuildFolderDecisionTree",
+            "private string? GetBranchPath");
 
-        Assert.Contains("MouseLeftButtonUp=\"OnProposedPathClicked\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("Cursor=\"Hand\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("await EnterExplorerRefinementModeAsync(_proposedFolder)", click, StringComparison.Ordinal);
-        Assert.DoesNotContain("MoveAsync", click, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"FolderTree\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("IsSameOrChild(folder.Path, branchPath)", tree, StringComparison.Ordinal);
+        Assert.Contains("rootItem.IsExpanded = true", tree, StringComparison.Ordinal);
     }
 
     [Fact]

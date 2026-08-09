@@ -1,7 +1,7 @@
 <Window x:Class="AtlasDrop.App.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Atlas Drop" Width="612" Height="586" MinWidth="520" MinHeight="476"
+        Title="Atlas Drop" Width="612" Height="720" MinWidth="520" MinHeight="300"
         WindowStartupLocation="Manual" Topmost="True" ResizeMode="CanResizeWithGrip"
         Background="#F5F7FA" ShowInTaskbar="True" PreviewKeyDown="OnWindowPreviewKeyDown">
     <Window.Resources>
@@ -52,10 +52,12 @@
                         </DockPanel>
                         <ListBox x:Name="SuggestionList" Visibility="Collapsed"
                                  SelectionChanged="OnSuggestionSelected" DisplayMemberPath="DisplayText"/>
-                        <TextBlock x:Name="ProposedPathText" Text="—" FontSize="14" FontWeight="SemiBold"
-                                   TextWrapping="Wrap" Margin="0,7,0,0" LineHeight="21"
-                                   Cursor="Hand" ToolTip="Ouvrir ce dossier dans l’Explorateur"
-                                   MouseLeftButtonUp="OnProposedPathClicked"/>
+                        <TreeView x:Name="FolderTree" Margin="0,7,0,0" MaxHeight="360"
+                                  Background="Transparent" BorderThickness="0"
+                                  ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                  VirtualizingStackPanel.IsVirtualizing="True"
+                                  VirtualizingStackPanel.VirtualizationMode="Recycling"/>
+                        <TextBlock x:Name="ProposedPathText" Text="—" Visibility="Collapsed"/>
                         <TextBlock x:Name="ConfidenceText" Text="" Foreground="#657089"
                                    Margin="0,5,0,0" TextWrapping="Wrap"/>
                     </StackPanel>
@@ -106,20 +108,6 @@
                     </StackPanel>
                 </Border>
 
-                <UniformGrid x:Name="DecisionButtons" Columns="4" Margin="-3,4,-3,0">
-                    <Button x:Name="YesButton" Content="C’EST EXACT" IsEnabled="False"
-                            Background="#17803D" Foreground="White" FontSize="12"
-                            Padding="3,8" Margin="3" Click="OnYes"/>
-                    <Button x:Name="NoButton" Content="BONNE BRANCHE" IsEnabled="False"
-                            Background="#2563EB" Foreground="White" FontSize="12"
-                            Padding="3,8" Margin="3" Click="OnNo"/>
-                    <Button x:Name="ChooseButton" Content="MAUVAIS DOSSIER"
-                            Background="#D97706" Foreground="White" FontSize="12"
-                            Padding="3,8" Margin="3" Click="OnChoose"/>
-                    <Button x:Name="CancelButton" Content="ANNULER" FontSize="12"
-                            Padding="3,8" Margin="3" Click="OnCancel"/>
-                </UniformGrid>
-
                 <Button x:Name="MoveHereButton" Content="DÉPOSER DANS CE DOSSIER"
                         Background="#17803D" Foreground="White" HorizontalAlignment="Stretch"
                         Visibility="Collapsed" IsEnabled="False" Margin="0,7,0,0" Click="OnMoveHere"/>
@@ -167,9 +155,16 @@
         </ScrollViewer>
 
         <StackPanel Grid.Row="2" Margin="0,7,0,0">
+            <UniformGrid x:Name="DecisionButtons" Columns="2" Margin="-3,0,-3,4">
+                <Button x:Name="YesButton" Content="C’EST EXACT" IsEnabled="False"
+                        Background="#17803D" Foreground="White" FontSize="12"
+                        Padding="3,8" Margin="3" Click="OnYes"/>
+                <Button x:Name="CancelButton" Content="ANNULER" FontSize="12"
+                        Padding="3,8" Margin="3" Click="OnCancel"/>
+            </UniformGrid>
             <TextBlock x:Name="PathLengthStatusText" Foreground="#657089"
                        TextAlignment="Center" TextWrapping="Wrap"/>
-            <StackPanel Margin="0,2,0,0">
+            <StackPanel x:Name="LearningControlsPanel" Margin="0,2,0,0">
                 <CheckBox x:Name="LearningEnabledCheckBox" Content="Apprentissage activé"
                           IsChecked="True" HorizontalAlignment="Left"/>
                 <WrapPanel HorizontalAlignment="Right" Margin="0,3,0,0">

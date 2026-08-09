@@ -97,6 +97,7 @@ public partial class MainWindow : Window
     private DateTime _lastActivityUtc = DateTime.UtcNow;
     private bool _reminderShown;
     private FileSystemWatcher? _indexWatcher;
+    private bool _compactExplorerMode;
 
     public MainWindow()
     {
@@ -202,13 +203,13 @@ public partial class MainWindow : Window
         SuggestionList.ItemsSource = _suggestions;
         SuggestionList.SelectedIndex = _suggestions.Count > 0 ? 0 : -1;
         YesButton.IsEnabled = _suggestions.Count > 0;
-        NoButton.IsEnabled = _suggestions.Count > 0;
+        BuildFolderDecisionTree(_suggestions.FirstOrDefault()?.FullPath);
 
         if (_suggestions.Count == 0)
         {
             _proposedFolder = null;
             ProposedPathText.Text = "Aucun dossier assez fiable";
-            ConfidenceText.Text = "Confiance inférieure à 30 % : utilise MAUVAIS DOSSIER pour parcourir OneDrive.";
+            ConfidenceText.Text = "Confiance inférieure à 30 % : clique sur OneDrive pour choisir manuellement.";
         }
 
         PrepareRename(fullPath, _analysis, _suggestions.FirstOrDefault());
@@ -223,7 +224,12 @@ public partial class MainWindow : Window
 
     private async Task LoadAutomaticFolderCandidatesAsync()
     {
-        _folders = await Task.Run(() => EnumerateFoldersToDepth(_options.OneDriveRoot, _options.MaxSuggestedDepth));
+        if (_folders.Count == 0)
+        {
+            _folders = await Task.Run(() =>
+                EnumerateFoldersToDepth(_options.OneDriveRoot, _options.MaxSuggestedDepth));
+            SaveIndex(_folders);
+        }
     }
 
     private async Task<AnalysisSnapshot> AnalyzeItemAsync(string path)
@@ -437,6 +443,105 @@ public partial class MainWindow : Window
         if (_analysis is not null && _activePath is not null) PrepareRename(_activePath, _analysis, option);
     }
 
+    private void BuildFolderDecisionTree(string? proposedFolder)
+    {
+        FolderTree.Items.Clear();
+        var rootItem = NewTreeItem(_oneDriveRoot, "☁  OneDrive");
+        rootItem.IsExpanded = true;
+        FolderTree.Items.Add(rootItem);
+
+        var branchPath = GetBranchPath(proposedFolder);
+        var folders = string.IsNullOrWhiteSpace(branchPath)
+            ? _folders.Where(folder => folder.Depth == 1).ToArray()
+            : _folders.Where(folder => IsSameOrChild(folder.Path, branchPath)).ToArray();
+
+        var nodes = new Dictionary<string, TreeViewItem>(StringComparer.OrdinalIgnoreCase)
+        {
+            [_oneDriveRoot] = rootItem
+        };
+        foreach (var folder in folders.OrderBy(folder => folder.Depth).ThenBy(folder => folder.Path, StringComparer.OrdinalIgnoreCase))
+        {
+            var parentPath = Path.GetDirectoryName(folder.Path) ?? _oneDriveRoot;
+            if (!nodes.TryGetValue(parentPath, out var parent)) parent = rootItem;
+            var node = NewTreeItem(folder.Path);
+            node.IsExpanded = true;
+            parent.Items.Add(node);
+            nodes[folder.Path] = node;
+        }
+    }
+
+    private string? GetBranchPath(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || !IsUnderRoot(path)) return null;
+        var relative = Path.GetRelativePath(_oneDriveRoot, path);
+        var branch = relative.Split(
+            new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar },
+            StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
+        return string.IsNullOrWhiteSpace(branch) ? null : Path.Combine(_oneDriveRoot, branch);
+    }
+
+    private static bool IsSameOrChild(string path, string parent)
+    {
+        try
+        {
+            var relative = Path.GetRelativePath(parent, path);
+            return relative == "." || (!relative.StartsWith("..", StringComparison.Ordinal) && !Path.IsPathRooted(relative));
+        }
+        catch { return false; }
+    }
+
+    private TreeViewItem NewTreeItem(string path, string? header = null)
+    {
+        var label = new TextBlock
+        {
+            Text = header ?? "📁  " + Path.GetFileName(path),
+            Tag = path,
+            Cursor = Cursors.Hand,
+            Padding = new Thickness(3, 2, 6, 2),
+            FontWeight = PathsEqualSafe(path, _proposedFolder) ? FontWeights.Bold : FontWeights.Normal,
+            Foreground = PathsEqualSafe(path, _proposedFolder)
+                ? System.Windows.Media.Brushes.DarkGreen
+                : System.Windows.Media.Brushes.Black
+        };
+        label.MouseLeftButtonUp += OnFolderTreeNodeClicked;
+        return new TreeViewItem { Header = label, Tag = path };
+    }
+
+    private async void OnFolderTreeNodeClicked(object sender, MouseButtonEventArgs e)
+    {
+        e.Handled = true;
+        if (sender is not TextBlock { Tag: string destination } || _moveInProgress) return;
+
+        if (PathsEqualSafe(destination, _oneDriveRoot))
+        {
+            _decisionPath = DecisionPath.WrongFolder;
+            _initialSuggestedFolder = _proposedFolder;
+            await EnterExplorerRefinementModeAsync(_oneDriveRoot);
+            return;
+        }
+
+        var depth = GetDepth(_oneDriveRoot, destination);
+        if (!Directory.Exists(destination) || !IsUnderRoot(destination) || depth is < 1 or > MaxDepth)
+        {
+            StatusText.Text = "Ce dossier n’est pas une destination autorisée.";
+            return;
+        }
+
+        _decisionPath = PathsEqualSafe(GetBranchPath(destination), GetBranchPath(_proposedFolder))
+            ? DecisionPath.GoodBranch
+            : DecisionPath.WrongFolder;
+        _initialSuggestedFolder = _proposedFolder;
+        await ExecuteMoveOnceAsync(destination);
+        _ = OpenDestinationBehindAsync(destination);
+    }
+
+    private async Task OpenDestinationBehindAsync(string destination)
+    {
+        var explorer = await OpenExplorerAndTrackAsync(destination);
+        if (explorer is nint hwnd) ShowWindow(hwnd, ShowWindowMaximized);
+        Dispatcher.Invoke(() => { Topmost = true; Activate(); });
+    }
+
     private async void OnProposedPathClicked(object sender, MouseButtonEventArgs e)
     {
         if (string.IsNullOrWhiteSpace(_proposedFolder)) return;
@@ -488,21 +593,7 @@ public partial class MainWindow : Window
         _decisionPath = DecisionPath.Exact;
         _initialSuggestedFolder = _proposedFolder;
         await ExecuteMoveOnceAsync(_proposedFolder);
-    }
-
-    private async void OnNo(object sender, RoutedEventArgs e)
-    {
-        if (string.IsNullOrWhiteSpace(_proposedFolder)) return;
-        _decisionPath = DecisionPath.GoodBranch;
-        _initialSuggestedFolder = _proposedFolder;
-        await EnterExplorerRefinementModeAsync(_proposedFolder);
-    }
-
-    private async void OnChoose(object sender, RoutedEventArgs e)
-    {
-        _decisionPath = DecisionPath.WrongFolder;
-        _initialSuggestedFolder = _proposedFolder;
-        await EnterExplorerRefinementModeAsync(_oneDriveRoot);
+        _ = OpenDestinationBehindAsync(_proposedFolder);
     }
 
     private async Task EnterExplorerRefinementModeAsync(string startingFolder)
@@ -516,6 +607,9 @@ public partial class MainWindow : Window
         MovePreviewPanel.Visibility = Visibility.Collapsed;
         ExplorerRefinementPanel.Visibility = Visibility.Visible;
         DecisionButtons.Visibility = Visibility.Collapsed;
+        LearningControlsPanel.Visibility = Visibility.Collapsed;
+        _compactExplorerMode = true;
+        PositionTopRight();
         BackButton.Visibility = Visibility.Visible;
         MoveHereButton.Content = "DÉPOSER DANS CE DOSSIER";
         MoveHereButton.IsEnabled = false;
@@ -760,6 +854,9 @@ public partial class MainWindow : Window
         RenamePanel.Visibility = Directory.Exists(_activePath ?? string.Empty) ? Visibility.Collapsed : Visibility.Visible;
         MovePreviewPanel.Visibility = Visibility.Visible;
         DecisionButtons.Visibility = Visibility.Visible;
+        LearningControlsPanel.Visibility = Visibility.Visible;
+        _compactExplorerMode = false;
+        PositionTopRight();
         BackButton.Visibility = Visibility.Collapsed;
         StatusText.Text = "Retour à la proposition. Aucun déplacement effectué.";
     }
@@ -1076,6 +1173,9 @@ public partial class MainWindow : Window
             MoveHereButton.Visibility = Visibility.Collapsed;
             RenamePanel.Visibility = Visibility.Collapsed;
             PostMovePanel.Visibility = Visibility.Visible;
+            LearningControlsPanel.Visibility = Visibility.Visible;
+            _compactExplorerMode = false;
+            PositionTopRight();
             BackButton.Visibility = Visibility.Collapsed;
             _explorerPathTimer.Stop();
             _undoSecondsRemaining = 10;
@@ -1181,9 +1281,6 @@ public partial class MainWindow : Window
             new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar },
             StringSplitOptions.RemoveEmptyEntries).Length;
     }
-
-    private static TreeViewItem NewTreeItem(string path, string? header = null) =>
-        new() { Header = header ?? Path.GetFileName(path), Tag = path };
 
     private List<FolderEntry> LoadOrBuildIndex()
     {
@@ -1683,7 +1780,9 @@ public partial class MainWindow : Window
         var maxHeightDip = Math.Max(MinHeight, workHeightDip - 16);
 
         Width = Math.Min(maxWidthDip, Math.Max(520, workWidthDip * .323));
-        Height = Math.Min(maxHeightDip, Math.Max(476, workHeightDip * .663));
+        Height = _compactExplorerMode
+            ? Math.Min(maxHeightDip, 330)
+            : Math.Min(maxHeightDip, Math.Max(620, workHeightDip * .82));
 
         var widthPixels = (int)Math.Round(Width * monitor.ScaleX);
         var heightPixels = (int)Math.Round(Height * monitor.ScaleY);
@@ -1800,18 +1899,21 @@ public partial class MainWindow : Window
         _decisionPath = DecisionPath.None; _initialSuggestedFolder = null; _lockedSourcePath = null; _trackedExplorerHwnd = null;
         _rejectedDestinations.Clear(); _learningCommitted = false; _moveInProgress = false;
         _pendingVoiceExplanation = null;
+        _compactExplorerMode = false;
         VoiceRulePanel.Visibility = Visibility.Collapsed;
         ExplainChoiceButton.Content = "🎤 EXPLIQUER MON CHOIX";
         ExplainChoiceButton.IsEnabled = true;
-        _suggestions.Clear(); SuggestionList.ItemsSource = null; Height = 586;
+        _suggestions.Clear(); SuggestionList.ItemsSource = null; FolderTree.Items.Clear();
         ItemNameText.Text = "En attente d’un clic molette…"; ProposedPathText.Text = "—"; ConfidenceText.Text = "";
         TrackedExplorerDestinationText.Text = "Ouverture de l’Explorateur…";
         RenameTextBox.Text = ""; AutoRenameStatusText.Text = ""; AutoRenameCheckBox.IsChecked = false;
         ExplorerRefinementPanel.Visibility = Visibility.Collapsed; PostMovePanel.Visibility = Visibility.Collapsed;
         SuggestionPanel.Visibility = Visibility.Visible; MovePreviewPanel.Visibility = Visibility.Visible;
+        LearningControlsPanel.Visibility = Visibility.Visible;
         BackButton.Visibility = Visibility.Collapsed;
         DecisionButtons.Visibility = Visibility.Visible; MoveHereButton.Visibility = Visibility.Collapsed; RenamePanel.Visibility = Visibility.Visible;
-        MoveHereButton.IsEnabled = false; YesButton.IsEnabled = false; NoButton.IsEnabled = false; IsEnabled = true;
+        MoveHereButton.IsEnabled = false; YesButton.IsEnabled = false; IsEnabled = true;
+        PositionTopRight();
     }
 
     public sealed record FolderEntry(string Path, int Depth, HashSet<string> Tokens);
