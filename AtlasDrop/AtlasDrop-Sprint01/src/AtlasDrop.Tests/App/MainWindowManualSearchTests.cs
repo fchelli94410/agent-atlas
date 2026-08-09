@@ -464,4 +464,16 @@ public sealed class MainWindowExplorerRefinementTests
         Assert.Contains("Math.Min(maxHeightDip, 430)", code, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void Deposit_button_is_pinned_outside_the_scrolling_content()
+    {
+        var xaml = File.ReadAllText(FindFile("MainWindow.xaml"));
+        var scrollEnd = xaml.IndexOf("</ScrollViewer>", StringComparison.Ordinal);
+        var deposit = xaml.IndexOf("x:Name=\"MoveHereButton\"", StringComparison.Ordinal);
+
+        Assert.True(scrollEnd >= 0);
+        Assert.True(deposit > scrollEnd);
+        Assert.Contains("Grid.Row=\"3\"", xaml, StringComparison.Ordinal);
+    }
+
 }
