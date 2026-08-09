@@ -28,9 +28,9 @@ public sealed class Sprint117LayoutHotfixTests
         Assert.True(suggestion >= 0);
         Assert.True(tree > suggestion);
         Assert.True(rename > tree);
-        Assert.Contains("MinHeight=\"315\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("MinHeight=\"390\"", xaml, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"MainContentScrollViewer\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("MinHeight=\"220\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("MinHeight=\"300\"", xaml, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -38,9 +38,9 @@ public sealed class Sprint117LayoutHotfixTests
     {
         var xaml = File.ReadAllText(FindFile("MainWindow.xaml"));
 
-        Assert.Contains("Padding=\"7,4,7,5\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Padding=\"5,2,5,3\"", xaml, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"ConfidenceLevelText\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("FontSize=\"9.5\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("FontSize=\"9\"", xaml, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"AutoRenameStatusText\" Foreground=\"#7A8498\" FontSize=\"9.5\"", xaml, StringComparison.Ordinal);
     }
 
@@ -52,7 +52,8 @@ public sealed class Sprint117LayoutHotfixTests
         var back = xaml.IndexOf("x:Name=\"BackButton\"", StringComparison.Ordinal);
         var learning = xaml.IndexOf("x:Name=\"LearningControlsPanel\"", StringComparison.Ordinal);
 
-        Assert.Contains("x:Name=\"RenamePanel\" Grid.Row=\"1\" Background=\"White\" BorderBrush=\"#BFC9D8\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"RenamePanel\" Grid.Row=\"1\" Background=\"White\" BorderBrush=\"#64748B\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("BorderThickness=\"1.75\"", xaml, StringComparison.Ordinal);
         Assert.True(learning > back);
         Assert.Contains("Value=\"Valide explicitement avant tout déplacement.\"", xaml, StringComparison.Ordinal);
         Assert.Contains("<Setter Property=\"Visibility\" Value=\"Collapsed\"/>", xaml, StringComparison.Ordinal);
