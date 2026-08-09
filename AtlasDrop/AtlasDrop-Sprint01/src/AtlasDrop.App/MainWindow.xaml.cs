@@ -226,7 +226,8 @@ public partial class MainWindow : Window
     {
         if (_folders.Count == 0)
         {
-            _folders = await Task.Run(BuildIndex);
+            _folders = await Task.Run(() =>
+                EnumerateFoldersToDepth(_options.OneDriveRoot, _options.MaxSuggestedDepth));
             SaveIndex(_folders);
         }
     }
