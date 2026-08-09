@@ -73,13 +73,14 @@ public sealed class MainWindowXamlTests
         Assert.Equal("Manual", (string?)root.Attribute("WindowStartupLocation"));
         Assert.Equal("True", (string?)root.Attribute("Topmost"));
     }
+
     [Fact]
     public void Compact_workflow_exposes_back_preview_history_and_learning_management()
     {
         var text = File.ReadAllText(FindFile("MainWindow.xaml"));
 
         Assert.Contains("Width=\"612\"", text, StringComparison.Ordinal);
-        Assert.Contains("Height=\"720\"", text, StringComparison.Ordinal);
+        Assert.Contains("Height=\"820\"", text, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"BackButton\"", text, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"CurrentMovePreviewText\"", text, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"HistoryButton\"", text, StringComparison.Ordinal);
@@ -104,5 +105,4 @@ public sealed class MainWindowXamlTests
         Assert.True(label >= 0 && label < tree);
         Assert.Contains("x:Name=\"ProposedPathText\"", text, StringComparison.Ordinal);
     }
-
 }
