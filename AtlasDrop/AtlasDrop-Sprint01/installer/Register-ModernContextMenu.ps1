@@ -13,10 +13,21 @@ $ErrorActionPreference = 'Stop'
 $packageName = 'AtlasDrop.ContextMenu'
 $logPath = Join-Path $ExternalLocation 'modern-context-menu.log'
 $thumbprintPath = Join-Path $ExternalLocation 'modern-context-cert.thumbprint'
+$machineTrustedPeople = 'Cert:\LocalMachine\TrustedPeople'
+$userTrustedPeople = 'Cert:\CurrentUser\TrustedPeople'
 
 function Write-AtlasLog([string]$message) {
     try {
         Add-Content -LiteralPath $logPath -Value "$(Get-Date -Format s)  $message" -Encoding UTF8
+    }
+    catch { }
+}
+
+function Remove-AtlasCertificateFromStore([string]$storePath, [string]$thumbprint) {
+    try {
+        Get-ChildItem $storePath -ErrorAction SilentlyContinue |
+            Where-Object { $_.Thumbprint -eq $thumbprint } |
+            ForEach-Object { Remove-Item -LiteralPath $_.PSPath -Force -ErrorAction SilentlyContinue }
     }
     catch { }
 }
@@ -42,29 +53,31 @@ try {
         throw "AtlasDrop.App.exe introuvable dans l'emplacement externe."
     }
 
-    # Nettoyer uniquement le certificat Atlas Drop précédemment mémorisé par notre installateur.
+    $principal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
+    if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+        throw "Le menu contextuel Windows 11 nécessite une installation avec droits administrateur pour approuver le certificat dans LocalMachine\TrustedPeople."
+    }
+
+    # Nettoyer uniquement le certificat Atlas Drop mémorisé par une installation précédente.
     if (Test-Path -LiteralPath $thumbprintPath) {
         $previousThumbprint = (Get-Content -LiteralPath $thumbprintPath -Raw).Trim()
         if ($previousThumbprint -match '^[0-9A-Fa-f]{40,64}$') {
-            $previousCertificate = Get-ChildItem Cert:\CurrentUser\TrustedPeople |
-                Where-Object { $_.Thumbprint -eq $previousThumbprint } |
-                Select-Object -First 1
-            if ($null -ne $previousCertificate) {
-                Remove-Item -LiteralPath $previousCertificate.PSPath -Force
-                Write-AtlasLog "Ancien certificat Atlas Drop retiré : $previousThumbprint"
-            }
+            Remove-AtlasCertificateFromStore $machineTrustedPeople $previousThumbprint
+            # Compatibilité avec les premières builds 1.1.5 qui utilisaient CurrentUser.
+            Remove-AtlasCertificateFromStore $userTrustedPeople $previousThumbprint
+            Write-AtlasLog "Ancien certificat Atlas Drop retiré : $previousThumbprint"
         }
     }
 
     $publicCertificate = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2($certificatePathFull)
     $thumbprint = $publicCertificate.Thumbprint
-    $alreadyTrusted = Get-ChildItem Cert:\CurrentUser\TrustedPeople |
+    $alreadyTrusted = Get-ChildItem $machineTrustedPeople -ErrorAction SilentlyContinue |
         Where-Object { $_.Thumbprint -eq $thumbprint } |
         Select-Object -First 1
 
     if ($null -eq $alreadyTrusted) {
-        Import-Certificate -FilePath $certificatePathFull -CertStoreLocation Cert:\CurrentUser\TrustedPeople | Out-Null
-        Write-AtlasLog "Certificat public Atlas Drop approuvé pour l'utilisateur courant : $thumbprint"
+        Import-Certificate -FilePath $certificatePathFull -CertStoreLocation $machineTrustedPeople | Out-Null
+        Write-AtlasLog "Certificat public Atlas Drop approuvé dans LocalMachine\TrustedPeople : $thumbprint"
     }
 
     Set-Content -LiteralPath $thumbprintPath -Value $thumbprint -Encoding ASCII
