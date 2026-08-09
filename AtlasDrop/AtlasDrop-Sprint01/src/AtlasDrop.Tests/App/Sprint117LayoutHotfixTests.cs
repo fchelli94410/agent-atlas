@@ -18,7 +18,7 @@ public sealed class Sprint117LayoutHotfixTests
     }
 
     [Fact]
-    public void Folder_tree_is_before_rename_panel_and_keeps_real_height()
+    public void Folder_tree_is_before_rename_panel_and_is_one_third_taller()
     {
         var xaml = File.ReadAllText(FindFile("MainWindow.xaml"));
         var suggestion = xaml.IndexOf("x:Name=\"SuggestionPanel\"", StringComparison.Ordinal);
@@ -28,16 +28,33 @@ public sealed class Sprint117LayoutHotfixTests
         Assert.True(suggestion >= 0);
         Assert.True(tree > suggestion);
         Assert.True(rename > tree);
-        Assert.Contains("MinHeight=\"250\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("MinHeight=\"315\"", xaml, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"MainContentScrollViewer\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("MinHeight=\"165\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("MinHeight=\"220\"", xaml, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void Rename_help_text_is_smaller_and_discreet()
+    public void Confidence_header_and_rename_help_are_compact()
     {
         var xaml = File.ReadAllText(FindFile("MainWindow.xaml"));
 
-        Assert.Contains("x:Name=\"AutoRenameStatusText\" Foreground=\"#7A8498\" FontSize=\"10.5\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Padding=\"7,4,7,5\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"ConfidenceLevelText\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("FontSize=\"9.5\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"AutoRenameStatusText\" Foreground=\"#7A8498\" FontSize=\"9.5\"", xaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Rename_panel_has_a_visible_frame_and_learning_controls_are_last()
+    {
+        var xaml = File.ReadAllText(FindFile("MainWindow.xaml"));
+        var rename = xaml.IndexOf("x:Name=\"RenamePanel\"", StringComparison.Ordinal);
+        var back = xaml.IndexOf("x:Name=\"BackButton\"", StringComparison.Ordinal);
+        var learning = xaml.IndexOf("x:Name=\"LearningControlsPanel\"", StringComparison.Ordinal);
+
+        Assert.Contains("x:Name=\"RenamePanel\" Grid.Row=\"1\" Background=\"White\" BorderBrush=\"#BFC9D8\"", xaml, StringComparison.Ordinal);
+        Assert.True(learning > back);
+        Assert.Contains("Value=\"Valide explicitement avant tout déplacement.\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("<Setter Property=\"Visibility\" Value=\"Collapsed\"/>", xaml, StringComparison.Ordinal);
     }
 }
