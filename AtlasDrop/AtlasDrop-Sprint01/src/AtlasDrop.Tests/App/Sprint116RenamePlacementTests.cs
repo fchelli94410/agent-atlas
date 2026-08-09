@@ -18,14 +18,14 @@ public sealed class Sprint116RenamePlacementTests
     }
 
     [Fact]
-    public void Proposed_name_is_visible_before_the_scrollable_tree()
+    public void Scrollable_tree_is_visible_before_the_proposed_name()
     {
         var text = File.ReadAllText(FindMainWindow());
-        var rename = text.IndexOf("x:Name=\"RenamePanel\"", StringComparison.Ordinal);
         var tree = text.IndexOf("x:Name=\"FolderTree\"", StringComparison.Ordinal);
+        var rename = text.IndexOf("x:Name=\"RenamePanel\"", StringComparison.Ordinal);
         var moveItem = text.IndexOf("ÉLÉMENT À DÉPLACER", StringComparison.Ordinal);
 
-        Assert.True(rename >= 0 && rename < tree && tree < moveItem);
+        Assert.True(tree >= 0 && tree < rename && rename < moveItem);
         Assert.Contains("NOM PROPOSÉ", text, StringComparison.Ordinal);
     }
 }
