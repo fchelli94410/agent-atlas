@@ -1843,13 +1843,15 @@ public partial class MainWindow : Window
     {
         var monitor = GetCursorMonitorPlacement();
         var area = monitor.WorkArea;
+        ShowWindow(hwnd, ShowWindowRestore);
         MoveWindow(
             hwnd,
-            area.Left + (int)((area.Right - area.Left) * .68),
-            area.Top + (int)(8 * monitor.ScaleY),
-            (int)((area.Right - area.Left) * .31),
-            (int)((area.Bottom - area.Top) * .55),
+            area.Left,
+            area.Top,
+            area.Right - area.Left,
+            area.Bottom - area.Top,
             true);
+        ShowWindow(hwnd, ShowWindowMaximized);
     }
 
     private static void ReleaseComObject(object? value)
@@ -1866,7 +1868,7 @@ public partial class MainWindow : Window
         var area = monitor.WorkArea;
         var workWidthDip = (area.Right - area.Left) / monitor.ScaleX;
         var workHeightDip = (area.Bottom - area.Top) / monitor.ScaleY;
-        var preferredRightGapDip = workWidthDip >= MinWidth + 134 ? 110d : 12d;
+        var preferredRightGapDip = workWidthDip >= MinWidth + 174 ? 150d : 12d;
         var maxWidthDip = Math.Max(MinWidth, workWidthDip - preferredRightGapDip - 24);
         var maxHeightDip = Math.Max(MinHeight, workHeightDip - 16);
 
@@ -1881,7 +1883,7 @@ public partial class MainWindow : Window
         var leftPixels = Math.Max(
             area.Left + (int)Math.Round(12 * monitor.ScaleX),
             area.Right - rightGapPixels - widthPixels);
-        var topPixels = area.Top + (int)Math.Round(8 * monitor.ScaleY);
+        var topPixels = area.Top + (int)Math.Round(16 * monitor.ScaleY);
 
         var hwnd = new WindowInteropHelper(this).Handle;
         if (hwnd != 0)
@@ -2029,6 +2031,7 @@ public partial class MainWindow : Window
     private const uint MonitorDefaultToNearest = 2;
     private const int MonitorDpiTypeEffective = 0;
     private const int ShowWindowMaximized = 3;
+    private const int ShowWindowRestore = 9;
 
     [StructLayout(LayoutKind.Sequential)]
     private struct NativePoint
