@@ -1,3 +1,4 @@
+using System.IO;
 using System.Text;
 using NAudio.Wave;
 using Whisper.net;
