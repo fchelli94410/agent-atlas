@@ -367,4 +367,15 @@ public sealed class MainWindowExplorerRefinementTests
         Assert.Contains("MainContentScrollViewer.ScrollToEnd()", code, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void Mouse_wheel_over_the_tree_scrolls_the_single_main_page()
+    {
+        var code = ReadCode();
+        var xaml = File.ReadAllText(FindFile("MainWindow.xaml"));
+
+        Assert.Contains("PreviewMouseWheel=\"OnFolderTreePreviewMouseWheel\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("MainContentScrollViewer.ScrollToVerticalOffset", code, StringComparison.Ordinal);
+        Assert.Contains("e.Handled = true", code, StringComparison.Ordinal);
+    }
+
 }
