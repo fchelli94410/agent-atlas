@@ -297,4 +297,20 @@ public sealed class MainWindowExplorerRefinementTests
         Assert.Contains("SaveLearningDictionary()", code, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void Voice_explanations_are_local_and_require_explicit_confirmation()
+    {
+        var code = ReadCode();
+        var voice = File.ReadAllText(FindFile("LocalVoiceExplanationService.cs"));
+        var project = File.ReadAllText(FindFile("AtlasDrop.App.csproj"));
+
+        Assert.Contains("WhisperFactory.FromPath", voice, StringComparison.Ordinal);
+        Assert.Contains("WithLanguage(\"fr\")", voice, StringComparison.Ordinal);
+        Assert.Contains("WhisperGgmlDownloader", voice, StringComparison.Ordinal);
+        Assert.Contains("OnConfirmVoiceRuleClicked", code, StringComparison.Ordinal);
+        Assert.Contains("Voici ce qu’Atlas Drop a compris", code, StringComparison.Ordinal);
+        Assert.Contains("Whisper.net.Runtime", project, StringComparison.Ordinal);
+        Assert.DoesNotContain("api.openai.com", voice, StringComparison.OrdinalIgnoreCase);
+    }
+
 }
