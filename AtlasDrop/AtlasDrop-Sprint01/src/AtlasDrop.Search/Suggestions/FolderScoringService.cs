@@ -44,11 +44,11 @@ public sealed class FolderScoringService : IFolderScoringService
         ArgumentNullException.ThrowIfNull(folder);
         ArgumentNullException.ThrowIfNull(context);
 
-        if (ContainsArchiveSegment(folder.Path) || ContainsArchiveSegment(folder.Name))
+        if (ContainsArchiveSegment(folder.FullPath) || ContainsArchiveSegment(folder.Name))
         {
             return new FolderScoreResult(
                 folder,
-                -10d,
+                0d,
                 new[] { "dossier archive exclu de toute recherche automatique" },
                 _confidenceService.Evaluate(0d));
         }
