@@ -1,88 +1,186 @@
 <Window x:Class="AtlasDrop.App.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Atlas Drop" Width="720" Height="690" MinWidth="590" MinHeight="560"
+        Title="Atlas Drop" Width="612" Height="586" MinWidth="520" MinHeight="476"
         WindowStartupLocation="Manual" Topmost="True" ResizeMode="CanResizeWithGrip"
-        Background="#F5F7FA" ShowInTaskbar="True">
+        Background="#F5F7FA" ShowInTaskbar="True" PreviewKeyDown="OnWindowPreviewKeyDown">
     <Window.Resources>
         <Style TargetType="Button">
-            <Setter Property="FontFamily" Value="Segoe UI"/><Setter Property="FontSize" Value="15"/>
-            <Setter Property="FontWeight" Value="SemiBold"/><Setter Property="Padding" Value="14,10"/>
-            <Setter Property="Margin" Value="5"/><Setter Property="MinHeight" Value="46"/>
+            <Setter Property="FontFamily" Value="Segoe UI"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Padding" Value="10,8"/>
+            <Setter Property="Margin" Value="4"/>
+            <Setter Property="MinHeight" Value="40"/>
         </Style>
-        <Style TargetType="TextBlock"><Setter Property="FontFamily" Value="Segoe UI"/><Setter Property="Foreground" Value="#172033"/></Style>
+        <Style TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="Segoe UI"/>
+            <Setter Property="Foreground" Value="#172033"/>
+        </Style>
     </Window.Resources>
-    <Grid Margin="18">
+
+    <Grid Margin="14">
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
-        <StackPanel>
-            <TextBlock Text="Atlas Drop" FontSize="25" FontWeight="Bold"/>
-            <TextBlock x:Name="ItemNameText" Text="En attente d’un clic molette…" FontSize="16" Margin="0,7,0,0" TextTrimming="CharacterEllipsis"/>
-        </StackPanel>
 
-        <Border x:Name="SuggestionPanel" Grid.Row="1" Background="White" BorderBrush="#D5DBE5" BorderThickness="1" CornerRadius="9" Padding="12" Margin="0,14,0,8">
+        <DockPanel Grid.Row="0">
+            <Button x:Name="BackButton" Content="←  RETOUR" DockPanel.Dock="Left"
+                    Visibility="Collapsed" MinHeight="32" Padding="8,4" Margin="0,0,8,0"
+                    Click="OnBack"/>
             <StackPanel>
-                <TextBlock Text="Dossier proposé" Foreground="#657089" FontWeight="SemiBold"/>
-                <ListBox x:Name="SuggestionList" Visibility="Collapsed"
-                         SelectionChanged="OnSuggestionSelected" DisplayMemberPath="DisplayText"/>
-                <TextBlock x:Name="ProposedPathText" Text="—" FontSize="15" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,7,0,0"
-                           Cursor="Hand" ToolTip="Ouvrir ce dossier dans l’Explorateur" MouseLeftButtonUp="OnProposedPathClicked"/>
-                <TextBlock x:Name="ConfidenceText" Text="" Foreground="#657089" Margin="0,4,0,0" TextWrapping="Wrap"/>
+                <TextBlock Text="Atlas Drop" FontSize="23" FontWeight="Bold"/>
+                <TextBlock x:Name="ItemNameText" Text="En attente d’un clic molette…"
+                           FontSize="14" Margin="0,4,0,0" TextTrimming="CharacterEllipsis"/>
             </StackPanel>
-        </Border>
+        </DockPanel>
 
-        <Border x:Name="RenamePanel" Grid.Row="2" Background="White" BorderBrush="#D5DBE5" BorderThickness="1" CornerRadius="9" Padding="12" Margin="0,0,0,8">
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
             <StackPanel>
-                <CheckBox x:Name="AutoRenameCheckBox" Content="Appliquer ce renommage lors du déplacement" FontWeight="SemiBold"/>
-                <TextBox x:Name="RenameTextBox" Margin="0,7,0,0" Padding="8" FontSize="14"/>
-                <TextBlock x:Name="AutoRenameStatusText" Foreground="#657089" Margin="0,4,0,0" TextWrapping="Wrap"/>
+                <Border x:Name="SuggestionPanel" Background="White" BorderBrush="#D5DBE5"
+                        BorderThickness="1" CornerRadius="9" Padding="11" Margin="0,12,0,7">
+                    <StackPanel>
+                        <DockPanel>
+                            <TextBlock Text="Dossier proposé" Foreground="#657089" FontWeight="SemiBold"/>
+                            <Border x:Name="ConfidenceBadge" DockPanel.Dock="Right" Background="#E8F0FF"
+                                    CornerRadius="10" Padding="8,3">
+                                <TextBlock x:Name="ConfidenceLevelText" Text="EN ATTENTE"
+                                           Foreground="#1D4ED8" FontSize="11" FontWeight="Bold"/>
+                            </Border>
+                        </DockPanel>
+                        <ListBox x:Name="SuggestionList" Visibility="Collapsed"
+                                 SelectionChanged="OnSuggestionSelected" DisplayMemberPath="DisplayText"/>
+                        <TextBlock x:Name="ProposedPathText" Text="—" FontSize="14" FontWeight="SemiBold"
+                                   TextWrapping="Wrap" Margin="0,7,0,0" LineHeight="21"
+                                   Cursor="Hand" ToolTip="Ouvrir ce dossier dans l’Explorateur"
+                                   MouseLeftButtonUp="OnProposedPathClicked"/>
+                        <TextBlock x:Name="ConfidenceText" Text="" Foreground="#657089"
+                                   Margin="0,5,0,0" TextWrapping="Wrap"/>
+                    </StackPanel>
+                </Border>
+
+                <Border x:Name="RenamePanel" Background="White" BorderBrush="#D5DBE5"
+                        BorderThickness="1" CornerRadius="9" Padding="11" Margin="0,0,0,7">
+                    <StackPanel>
+                        <CheckBox x:Name="AutoRenameCheckBox"
+                                  Content="Appliquer ce renommage lors du déplacement"
+                                  FontWeight="SemiBold"/>
+                        <TextBox x:Name="RenameTextBox" Margin="0,6,0,0" Padding="7" FontSize="13"/>
+                        <TextBlock x:Name="AutoRenameStatusText" Foreground="#657089"
+                                   Margin="0,3,0,0" TextWrapping="Wrap"/>
+                    </StackPanel>
+                </Border>
+
+                <Border x:Name="MovePreviewPanel" Background="#EFF6FF" BorderBrush="#93C5FD"
+                        BorderThickness="1" CornerRadius="9" Padding="10" Margin="0,0,0,7">
+                    <StackPanel>
+                        <TextBlock Text="AVANT LE DÉPLACEMENT" Foreground="#1D4ED8"
+                                   FontSize="11" FontWeight="Bold"/>
+                        <TextBlock x:Name="CurrentMovePreviewText" Text="Fichier → destination"
+                                   Margin="0,4,0,0" TextWrapping="Wrap" FontWeight="SemiBold"/>
+                    </StackPanel>
+                </Border>
+
+                <Border x:Name="ExplorerRefinementPanel" Background="White" BorderBrush="#2563EB"
+                        BorderThickness="1.5" CornerRadius="9" Padding="14" Visibility="Collapsed">
+                    <StackPanel>
+                        <TextBlock Text="1. Choisis le dossier dans l’Explorateur"
+                                   FontSize="17" FontWeight="Bold"/>
+                        <TextBlock Text="La fenêtre OneDrive est ouverte en plein écran derrière Atlas Drop."
+                                   FontSize="13" Foreground="#657089" Margin="0,5,0,10" TextWrapping="Wrap"/>
+                        <Border Background="#EFF6FF" BorderBrush="#93C5FD" BorderThickness="1"
+                                CornerRadius="8" Padding="10">
+                            <StackPanel>
+                                <TextBlock Text="2. DOSSIER ACTUELLEMENT OUVERT"
+                                           Foreground="#1D4ED8" FontSize="11" FontWeight="Bold"/>
+                                <TextBlock x:Name="TrackedExplorerDestinationText"
+                                           Text="Ouverture de l’Explorateur…"
+                                           FontSize="14" FontWeight="SemiBold" Margin="0,6,0,0"
+                                           TextWrapping="Wrap" LineHeight="20"/>
+                                <TextBlock x:Name="DestinationReadyText" Text="● Destination en attente"
+                                           Foreground="#D97706" Margin="0,7,0,0" FontWeight="SemiBold"/>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </Border>
+
+                <UniformGrid x:Name="DecisionButtons" Columns="4" Margin="-3,4,-3,0">
+                    <Button x:Name="YesButton" Content="C’EST EXACT" IsEnabled="False"
+                            Background="#17803D" Foreground="White" FontSize="12"
+                            Padding="3,8" Margin="3" Click="OnYes"/>
+                    <Button x:Name="NoButton" Content="BONNE BRANCHE" IsEnabled="False"
+                            Background="#2563EB" Foreground="White" FontSize="12"
+                            Padding="3,8" Margin="3" Click="OnNo"/>
+                    <Button x:Name="ChooseButton" Content="MAUVAIS DOSSIER"
+                            Background="#D97706" Foreground="White" FontSize="12"
+                            Padding="3,8" Margin="3" Click="OnChoose"/>
+                    <Button x:Name="CancelButton" Content="ANNULER" FontSize="12"
+                            Padding="3,8" Margin="3" Click="OnCancel"/>
+                </UniformGrid>
+
+                <Button x:Name="MoveHereButton" Content="DÉPOSER DANS CE DOSSIER"
+                        Background="#17803D" Foreground="White" HorizontalAlignment="Stretch"
+                        Visibility="Collapsed" IsEnabled="False" Margin="0,7,0,0" Click="OnMoveHere"/>
+
+                <Border x:Name="PostMovePanel" Background="#ECFDF3" BorderBrush="#17803D"
+                        BorderThickness="1" CornerRadius="8" Padding="10" Visibility="Collapsed"
+                        Margin="0,7,0,0">
+                    <StackPanel>
+                        <TextBlock Text="Classement réussi. Le classement est-il conforme ?"
+                                   FontWeight="Bold" TextAlignment="Center" TextWrapping="Wrap"/>
+                        <UniformGrid Columns="2" Margin="-4,4,-4,0">
+                            <Button x:Name="ConfirmClassificationButton" Content="OUI, CONFIRMER"
+                                    Background="#17803D" Foreground="White"
+                                    Click="OnClassificationConfirmed"/>
+                            <Button x:Name="CorrectClassificationButton" Content="NON, CORRIGER"
+                                    Background="#D97706" Foreground="White"
+                                    Click="OnClassificationRejected"/>
+                        </UniformGrid>
+                        <Button x:Name="ExplainChoiceButton" Content="🎤 EXPLIQUER MON CHOIX"
+                                Background="#6D28D9" Foreground="White"
+                                Click="OnExplainChoiceClicked"/>
+                        <Border x:Name="VoiceRulePanel" Visibility="Collapsed" Background="#F5F3FF"
+                                BorderBrush="#A78BFA" BorderThickness="1" CornerRadius="7"
+                                Padding="9" Margin="3">
+                            <StackPanel>
+                                <TextBlock x:Name="VoiceStatusText" Text="Écoute…"
+                                           Foreground="#5B21B6" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                                <TextBlock x:Name="VoiceTranscriptText" Margin="0,5,0,0"
+                                           TextWrapping="Wrap"/>
+                                <TextBlock x:Name="VoiceRulePreviewText" Margin="0,5,0,0"
+                                           FontWeight="Bold" TextWrapping="Wrap"/>
+                                <UniformGrid Columns="2" Margin="-3,5,-3,0">
+                                    <Button Content="ENREGISTRER LA RÈGLE" Background="#17803D"
+                                            Foreground="White" Click="OnConfirmVoiceRuleClicked"/>
+                                    <Button Content="IGNORER" Click="OnCancelVoiceRuleClicked"/>
+                                </UniformGrid>
+                            </StackPanel>
+                        </Border>
+                        <Button x:Name="UndoMoveButton" Content="ANNULER LE DÉPLACEMENT (10 s)"
+                                Background="#B91C1C" Foreground="White"
+                                Click="OnClassificationRejected"/>
+                    </StackPanel>
+                </Border>
             </StackPanel>
-        </Border>
+        </ScrollViewer>
 
-        <Border x:Name="ExplorerRefinementPanel" Grid.Row="3" Background="White" BorderBrush="#2563EB"
-                BorderThickness="1" CornerRadius="9" Padding="18" Visibility="Collapsed">
-            <StackPanel VerticalAlignment="Center">
-                <TextBlock Text="Affiner dans l’Explorateur" FontSize="20" FontWeight="Bold"/>
-                <TextBlock Text="Navigue dans la fenêtre Explorateur ouverte par Atlas Drop, puis reviens ici et clique DÉPOSER ICI."
-                           FontSize="15" Foreground="#657089" Margin="0,10,0,14" TextWrapping="Wrap"/>
-                <TextBlock Text="Destination suivie" Foreground="#657089" FontWeight="SemiBold"/>
-                <TextBlock x:Name="TrackedExplorerDestinationText" Text="Ouverture de l’Explorateur…"
-                           FontSize="16" FontWeight="SemiBold" Margin="0,6,0,0" TextWrapping="Wrap"/>
+        <StackPanel Grid.Row="2" Margin="0,7,0,0">
+            <TextBlock x:Name="PathLengthStatusText" Foreground="#657089"
+                       TextAlignment="Center" TextWrapping="Wrap"/>
+            <StackPanel Margin="0,2,0,0">
+                <CheckBox x:Name="LearningEnabledCheckBox" Content="Apprentissage activé"
+                          IsChecked="True" HorizontalAlignment="Left"/>
+                <WrapPanel HorizontalAlignment="Right" Margin="0,3,0,0">
+                    <Button x:Name="HistoryButton" Content="HISTORIQUE" MinHeight="30"
+                            Padding="7,3" Click="OnHistoryClicked"/>
+                    <Button x:Name="ManageLearningButton" Content="GÉRER APPRENTISSAGE"
+                            MinHeight="30" Padding="7,3" Click="OnManageLearningClicked"/>
+                    <Button x:Name="ResetLearningButton" Content="TOUT EFFACER"
+                            MinHeight="30" Padding="7,3"/>
+                </WrapPanel>
             </StackPanel>
-        </Border>
-
-        <UniformGrid x:Name="DecisionButtons" Grid.Row="4" Columns="4" Margin="-3,8,-3,0">
-            <Button x:Name="YesButton" Content="C’EST EXACT" IsEnabled="False" Background="#17803D" Foreground="#172033"
-                    FontSize="13" Padding="4,10" Margin="3,5" Click="OnYes"/>
-            <Button x:Name="NoButton" Content="BONNE BRANCHE" IsEnabled="False" Background="#2563EB" Foreground="#172033"
-                    FontSize="13" Padding="4,10" Margin="3,5" Click="OnNo"/>
-            <Button x:Name="ChooseButton" Content="MAUVAIS DOSSIER" Background="#D97706" Foreground="White"
-                    FontSize="13" Padding="4,10" Margin="3,5" Click="OnChoose"/>
-            <Button x:Name="CancelButton" Content="ANNULER"
-                    FontSize="13" Padding="4,10" Margin="3,5" Click="OnCancel"/>
-        </UniformGrid>
-
-        <StackPanel Grid.Row="5">
-            <Button x:Name="MoveHereButton" Content="DÉPOSER ICI" Background="#17803D" Foreground="White" HorizontalAlignment="Stretch" Visibility="Collapsed" IsEnabled="False" Click="OnMoveHere"/>
-            <Border x:Name="PostMovePanel" Background="#ECFDF3" BorderBrush="#17803D" BorderThickness="1" CornerRadius="8" Padding="10" Visibility="Collapsed">
-                <StackPanel>
-                    <TextBlock Text="Classement réussi. Le classement est-il conforme ?" FontWeight="Bold" TextAlignment="Center" TextWrapping="Wrap"/>
-                    <UniformGrid Columns="2" Margin="-5,5,-5,0">
-                        <Button x:Name="ConfirmClassificationButton" Content="OUI" Background="#17803D" Foreground="White" Click="OnClassificationConfirmed"/>
-                        <Button x:Name="CorrectClassificationButton" Content="NON" Background="#D97706" Foreground="White" Click="OnClassificationRejected"/>
-                    </UniformGrid>
-                </StackPanel>
-            </Border>
-        </StackPanel>
-
-        <StackPanel Grid.Row="6" Margin="0,8,0,0">
-            <TextBlock x:Name="PathLengthStatusText" Foreground="#657089" TextAlignment="Center" TextWrapping="Wrap"/>
-            <DockPanel Margin="0,4,0,0">
-                <Button x:Name="ResetLearningButton" Content="EFFACER APPRENTISSAGE" DockPanel.Dock="Right" MinHeight="30" Padding="7,3"/>
-                <CheckBox x:Name="LearningEnabledCheckBox" Content="Apprentissage activé" IsChecked="True" VerticalAlignment="Center"/>
-            </DockPanel>
             <TextBlock x:Name="LearningStatusText" Foreground="#657089" TextAlignment="Center"/>
             <TextBlock x:Name="StatusText" Text="Atlas Drop fonctionne en arrière-plan."
                        TextAlignment="Center" Foreground="#657089" TextWrapping="Wrap"/>

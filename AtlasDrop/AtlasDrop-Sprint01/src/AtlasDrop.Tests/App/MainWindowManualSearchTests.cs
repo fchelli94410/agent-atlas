@@ -54,7 +54,7 @@ public sealed class MainWindowExplorerRefinementTests
     [InlineData("BONNE BRANCHE")]
     [InlineData("MAUVAIS DOSSIER")]
     [InlineData("ANNULER")]
-    [InlineData("DÉPOSER ICI")]
+    [InlineData("DÉPOSER DANS CE DOSSIER")]
     public void Decision_labels_match_the_validated_workflow(string label)
     {
         var xaml = File.ReadAllText(FindFile("MainWindow.xaml"));
@@ -261,6 +261,56 @@ public sealed class MainWindowExplorerRefinementTests
         Assert.Contains("WeakPositiveLearningWeight", apply, StringComparison.Ordinal);
         Assert.Contains("!SamePath(current.FullName, _oneDriveRoot)", apply, StringComparison.Ordinal);
         Assert.DoesNotContain("RecordLearningBatch", rejected, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Fiscal_documents_are_boosted_toward_finances_and_taxes()
+    {
+        var code = ReadCode();
+
+        Assert.Contains("\"revenus\"", code, StringComparison.Ordinal);
+        Assert.Contains("\"impôts\"", code, StringComparison.Ordinal);
+        Assert.Contains("\"finances\"", code, StringComparison.Ordinal);
+        Assert.Contains("fiscal && fiscalFolder", code, StringComparison.Ordinal);
+        Assert.Contains("return 0.32d", code, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Explorer_is_maximized_and_destination_is_refreshed_live()
+    {
+        var code = ReadCode();
+
+        Assert.Contains("ShowWindow(explorerHwnd, ShowWindowMaximized)", code, StringComparison.Ordinal);
+        Assert.Contains("_explorerPathTimer.Start()", code, StringComparison.Ordinal);
+        Assert.Contains("OnExplorerPathTimerTick", code, StringComparison.Ordinal);
+        Assert.Contains("Destination prête", code, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Rename_editing_enables_apply_and_learning_can_be_partially_deleted()
+    {
+        var code = ReadCode();
+
+        Assert.Contains("AutoRenameCheckBox.IsChecked = true", code, StringComparison.Ordinal);
+        Assert.Contains("OnManageLearningClicked", code, StringComparison.Ordinal);
+        Assert.Contains("SUPPRIMER LA SÉLECTION", code, StringComparison.Ordinal);
+        Assert.Contains("SaveLearningDictionary()", code, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Voice_explanations_are_local_and_require_explicit_confirmation()
+    {
+        var code = ReadCode();
+        var voice = File.ReadAllText(FindFile("LocalVoiceExplanationService.cs"));
+        var project = File.ReadAllText(FindFile("AtlasDrop.App.csproj"));
+
+        Assert.Contains("WhisperFactory.FromPath", voice, StringComparison.Ordinal);
+        Assert.Contains("WithLanguage(\"fr\")", voice, StringComparison.Ordinal);
+        Assert.Contains("WhisperGgmlDownloader", voice, StringComparison.Ordinal);
+        Assert.Contains("OnConfirmVoiceRuleClicked", code, StringComparison.Ordinal);
+        Assert.Contains("Voici ce qu’Atlas Drop a compris", code, StringComparison.Ordinal);
+        Assert.Contains("Whisper.net.Runtime", project, StringComparison.Ordinal);
+        Assert.DoesNotContain("api.openai.com", voice, StringComparison.OrdinalIgnoreCase);
     }
 
 }

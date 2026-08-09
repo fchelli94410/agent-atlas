@@ -66,6 +66,12 @@ public partial class MainWindow : Window
     private readonly LocalLearningService _learningService = new(new InMemoryLearningRepository());
     private readonly InactivityReminderPolicy _reminderPolicy = new(TimeSpan.FromMinutes(2));
     private readonly DispatcherTimer _reminderTimer = new() { Interval = TimeSpan.FromSeconds(10) };
+    private readonly DispatcherTimer _explorerPathTimer = new() { Interval = TimeSpan.FromMilliseconds(350) };
+    private readonly DispatcherTimer _undoTimer = new() { Interval = TimeSpan.FromSeconds(1) };
+    private int _undoSecondsRemaining;
+    private bool _preparingRename;
+    private LocalVoiceExplanationService? _voiceService;
+    private string? _pendingVoiceExplanation;
     private readonly FolderScoringService _folderScoring = new(new TextNormalizer(), MaxDepth);
     private readonly string _oneDriveRoot;
     private readonly string _stateDirectory;
@@ -99,6 +105,7 @@ public partial class MainWindow : Window
         _options = new AtlasDropOptions { OneDriveRoot = _oneDriveRoot, MaxSuggestedDepth = MaxDepth };
         _stateDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AtlasDrop");
         Directory.CreateDirectory(_stateDirectory);
+        _voiceService = new LocalVoiceExplanationService(_stateDirectory);
         LoadLearning();
         _folders = LoadOrBuildIndex();
         RenameTextBox.TextChanged += OnUserTextChanged;
@@ -106,6 +113,8 @@ public partial class MainWindow : Window
         LearningEnabledCheckBox.Unchecked += OnLearningEnabledChanged;
         ResetLearningButton.Click += OnResetLearningClicked;
         _reminderTimer.Tick += OnReminderTick;
+        _explorerPathTimer.Tick += OnExplorerPathTimerTick;
+        _undoTimer.Tick += OnUndoTimerTick;
         _reminderTimer.Start();
         _feedback.PlayLaunchSound();
         _closeTimer.Tick += (_, _) => { _closeTimer.Stop(); Hide(); ResetOperation(); };
@@ -414,8 +423,16 @@ public partial class MainWindow : Window
     {
         if (SuggestionList.SelectedItem is not SuggestionOption option) return;
         _proposedFolder = option.FullPath;
-        ProposedPathText.Text = ToOneDriveDisplayPath(option.FullPath);
+        ProposedPathText.Text = ToOneDriveTreeDisplayPath(option.FullPath);
+        var confidenceLevel = option.Score >= 0.70d ? "ÉLEVÉE" : option.Score >= 0.45d ? "MOYENNE" : "FAIBLE";
+        ConfidenceLevelText.Text = confidenceLevel;
+        ConfidenceBadge.Background = confidenceLevel == "ÉLEVÉE"
+            ? System.Windows.Media.Brushes.Honeydew
+            : confidenceLevel == "MOYENNE"
+                ? System.Windows.Media.Brushes.LemonChiffon
+                : System.Windows.Media.Brushes.MistyRose;
         ConfidenceText.Text = $"Confiance {option.Score:P0} — {option.Reason}";
+        CurrentMovePreviewText.Text = $"{Path.GetFileName(_activePath ?? string.Empty)}  →  {ToOneDriveDisplayPath(option.FullPath)}";
         YesButton.IsEnabled = true;
         if (_analysis is not null && _activePath is not null) PrepareRename(_activePath, _analysis, option);
     }
@@ -456,8 +473,10 @@ public partial class MainWindow : Window
         var suggestion = _renameService.Suggest(context);
         var confidence = new SuggestionConfidenceService().Evaluate(option?.Score ?? 0d);
         var decision = _autoRenamePolicy.Decide(suggestion, confidence, userEnabledAutoRename: true);
+        _preparingRename = true;
         RenameTextBox.Text = suggestion.ProposedFileName;
         AutoRenameCheckBox.IsChecked = decision.ShouldApply;
+        _preparingRename = false;
         AutoRenameStatusText.Text = suggestion.Changed
             ? $"Proposition modifiable — {decision.Reason}"
             : "Nom actuel conservé : aucune amélioration fiable.";
@@ -494,19 +513,35 @@ public partial class MainWindow : Window
         _trackedExplorerHwnd = null;
         SuggestionPanel.Visibility = Visibility.Collapsed;
         RenamePanel.Visibility = Visibility.Collapsed;
+        MovePreviewPanel.Visibility = Visibility.Collapsed;
         ExplorerRefinementPanel.Visibility = Visibility.Visible;
         DecisionButtons.Visibility = Visibility.Collapsed;
-        MoveHereButton.Content = "DÉPOSER ICI";
+        BackButton.Visibility = Visibility.Visible;
+        MoveHereButton.Content = "DÉPOSER DANS CE DOSSIER";
         MoveHereButton.IsEnabled = false;
         MoveHereButton.Visibility = Visibility.Visible;
-        TrackedExplorerDestinationText.Text = ToOneDriveDisplayPath(startingFolder);
+        TrackedExplorerDestinationText.Text = ToOneDriveTreeDisplayPath(startingFolder);
+        DestinationReadyText.Text = "● Ouverture de l’Explorateur…";
+        DestinationReadyText.Foreground = System.Windows.Media.Brushes.DarkOrange;
         StatusText.Text = "Source verrouillée. Ouverture de l’Explorateur — aucun déplacement effectué.";
 
         _trackedExplorerHwnd = await OpenExplorerAndTrackAsync(startingFolder);
+        if (_trackedExplorerHwnd is nint explorerHwnd)
+        {
+            ShowWindow(explorerHwnd, ShowWindowMaximized);
+            Topmost = true;
+            Activate();
+            _explorerPathTimer.Start();
+        }
         MoveHereButton.IsEnabled = _trackedExplorerHwnd is not null;
         StatusText.Text = _trackedExplorerHwnd is null
-            ? "Fenêtre Explorateur introuvable. Aucun déplacement effectué."
-            : "Navigue dans cette fenêtre Explorateur, puis clique DÉPOSER ICI.";
+            ? "Explorateur introuvable : utilise RETOUR puis réessaie."
+            : "Choisis le dossier dans l’Explorateur, puis clique DÉPOSER DANS CE DOSSIER.";
+        if (_trackedExplorerHwnd is null)
+        {
+            DestinationReadyText.Text = "● Explorateur introuvable";
+            DestinationReadyText.Foreground = System.Windows.Media.Brushes.Firebrick;
+        }
     }
 
     private async void OnMoveHere(object sender, RoutedEventArgs e)
@@ -563,10 +598,194 @@ public partial class MainWindow : Window
 
     private void OnUserTextChanged(object sender, TextChangedEventArgs e)
     {
+        if (!_preparingRename && !string.IsNullOrWhiteSpace(RenameTextBox.Text))
+        {
+            AutoRenameCheckBox.IsChecked = true;
+            AutoRenameStatusText.Text = "✓ Ton nom personnalisé sera appliqué lors du déplacement.";
+        }
         _isUserTyping = true;
         _lastActivityUtc = DateTime.UtcNow;
         _reminderShown = false;
         _ = Task.Delay(900).ContinueWith(_ => Dispatcher.BeginInvoke(() => _isUserTyping = false));
+    }
+
+    private async void OnExplainChoiceClicked(object sender, RoutedEventArgs e)
+    {
+        if (_pendingMove is null || _voiceService is null) return;
+
+        VoiceRulePanel.Visibility = Visibility.Visible;
+        if (!_voiceService.IsRecording)
+        {
+            try
+            {
+                _voiceService.StartRecording();
+                ExplainChoiceButton.Content = "■ ARRÊTER ET ANALYSER";
+                VoiceStatusText.Text = "🎤 Je t’écoute. Explique simplement pourquoi ce fichier va dans ce dossier.";
+                VoiceTranscriptText.Text = string.Empty;
+                VoiceRulePreviewText.Text = string.Empty;
+            }
+            catch (Exception ex)
+            {
+                VoiceStatusText.Text = "Microphone indisponible : vérifie l’autorisation Microphone de Windows. " + ex.Message;
+            }
+            return;
+        }
+
+        ExplainChoiceButton.IsEnabled = false;
+        ExplainChoiceButton.Content = "ANALYSE EN COURS…";
+        try
+        {
+            var progress = new Progress<string>(message => VoiceStatusText.Text = message);
+            var transcription = await _voiceService.StopAndTranscribeAsync(progress);
+            if (string.IsNullOrWhiteSpace(transcription))
+            {
+                VoiceStatusText.Text = "Aucune phrase comprise. Clique sur le micro pour réessayer.";
+                return;
+            }
+
+            _pendingVoiceExplanation = transcription;
+            var tokens = ExtractVoiceLearningTokens(transcription);
+            VoiceStatusText.Text = "Voici ce qu’Atlas Drop a compris. Confirme avant tout apprentissage.";
+            VoiceTranscriptText.Text = $"« {transcription} »";
+            VoiceRulePreviewText.Text = tokens.Length == 0
+                ? "Aucun mot suffisamment précis détecté."
+                : $"Règle proposée : {string.Join(", ", tokens)}  →  {ToOneDriveDisplayPath(_pendingMove.Destination)}";
+        }
+        catch (Exception ex)
+        {
+            VoiceStatusText.Text = "Analyse vocale impossible : " + ex.Message + " Tu peux réessayer sans modifier le classement.";
+        }
+        finally
+        {
+            ExplainChoiceButton.IsEnabled = true;
+            ExplainChoiceButton.Content = "🎤 EXPLIQUER MON CHOIX";
+        }
+    }
+
+    private void OnConfirmVoiceRuleClicked(object sender, RoutedEventArgs e)
+    {
+        if (_pendingMove is null || string.IsNullOrWhiteSpace(_pendingVoiceExplanation)) return;
+
+        var tokens = ExtractVoiceLearningTokens(_pendingVoiceExplanation);
+        if (tokens.Length == 0)
+        {
+            VoiceStatusText.Text = "Règle non enregistrée : aucun mot suffisamment précis.";
+            return;
+        }
+
+        foreach (var token in tokens)
+        {
+            var key = LearningKey(token, _pendingMove.Destination);
+            _learning.TryGetValue(key, out var score);
+            _learning[key] = Math.Clamp(score + StrongPositiveLearningWeight, -20, 50);
+        }
+
+        SaveLearningDictionary();
+        VoiceStatusText.Text = "✓ Explication enregistrée dans l’apprentissage.";
+        VoiceRulePreviewText.Text = string.Empty;
+        _pendingVoiceExplanation = null;
+    }
+
+    private void OnCancelVoiceRuleClicked(object sender, RoutedEventArgs e)
+    {
+        _pendingVoiceExplanation = null;
+        VoiceRulePanel.Visibility = Visibility.Collapsed;
+        VoiceTranscriptText.Text = string.Empty;
+        VoiceRulePreviewText.Text = string.Empty;
+        VoiceStatusText.Text = "Explication ignorée. Aucun apprentissage ajouté.";
+    }
+
+    private static string[] ExtractVoiceLearningTokens(string explanation)
+    {
+        var tokens = Tokenize(explanation);
+        ExpandBusinessTokens(tokens);
+        var stopWords = new HashSet<string>(
+            new[]
+            {
+                "dans", "pour", "avec", "parce", "cette", "fichier", "dossier",
+                "mettre", "rangé", "range", "cela", "celui", "donc", "ici", "chez",
+                "sont", "est", "une", "des", "les", "mon", "mes", "sur"
+            },
+            StringComparer.OrdinalIgnoreCase);
+        return tokens
+            .Where(token => !stopWords.Contains(token))
+            .OrderByDescending(token => token.Length)
+            .ThenBy(token => token, StringComparer.OrdinalIgnoreCase)
+            .Take(10)
+            .ToArray();
+    }
+
+    private void OnExplorerPathTimerTick(object? sender, EventArgs e)
+    {
+        if (_trackedExplorerHwnd is not nint explorerHwnd ||
+            !TryGetExplorerPathByHwnd(explorerHwnd, out var destination))
+        {
+            MoveHereButton.IsEnabled = false;
+            DestinationReadyText.Text = "● Explorateur fermé ou inaccessible";
+            DestinationReadyText.Foreground = System.Windows.Media.Brushes.Firebrick;
+            return;
+        }
+
+        var depth = GetDepth(_oneDriveRoot, destination);
+        var valid = Directory.Exists(destination) && IsUnderRoot(destination) && depth is >= 0 and <= MaxDepth;
+        TrackedExplorerDestinationText.Text = ToOneDriveTreeDisplayPath(destination);
+        MoveHereButton.IsEnabled = valid;
+        DestinationReadyText.Text = valid ? "● Destination prête" : "● Choisis un dossier OneDrive de niveau 0 à 4";
+        DestinationReadyText.Foreground = valid ? System.Windows.Media.Brushes.ForestGreen : System.Windows.Media.Brushes.DarkOrange;
+    }
+
+    private void OnUndoTimerTick(object? sender, EventArgs e)
+    {
+        _undoSecondsRemaining--;
+        if (_undoSecondsRemaining <= 0)
+        {
+            _undoTimer.Stop();
+            UndoMoveButton.IsEnabled = false;
+            UndoMoveButton.Content = "DÉLAI D’ANNULATION TERMINÉ";
+            return;
+        }
+
+        UndoMoveButton.Content = $"ANNULER LE DÉPLACEMENT ({_undoSecondsRemaining} s)";
+    }
+
+    private void OnBack(object sender, RoutedEventArgs e)
+    {
+        if (_pendingMove is not null) return;
+        _explorerPathTimer.Stop();
+        _trackedExplorerHwnd = null;
+        _lockedSourcePath = null;
+        ExplorerRefinementPanel.Visibility = Visibility.Collapsed;
+        MoveHereButton.Visibility = Visibility.Collapsed;
+        SuggestionPanel.Visibility = Visibility.Visible;
+        RenamePanel.Visibility = Directory.Exists(_activePath ?? string.Empty) ? Visibility.Collapsed : Visibility.Visible;
+        MovePreviewPanel.Visibility = Visibility.Visible;
+        DecisionButtons.Visibility = Visibility.Visible;
+        BackButton.Visibility = Visibility.Collapsed;
+        StatusText.Text = "Retour à la proposition. Aucun déplacement effectué.";
+    }
+
+    private void OnWindowPreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Escape)
+        {
+            if (ExplorerRefinementPanel.Visibility == Visibility.Visible) OnBack(sender, e);
+            else OnCancel(sender, e);
+            e.Handled = true;
+            return;
+        }
+
+        if (e.Key == Key.Enter && MoveHereButton.Visibility == Visibility.Visible && MoveHereButton.IsEnabled)
+        {
+            OnMoveHere(sender, e);
+            e.Handled = true;
+            return;
+        }
+
+        if (e.Key == Key.Enter && DecisionButtons.Visibility == Visibility.Visible && YesButton.IsEnabled)
+        {
+            OnYes(sender, e);
+            e.Handled = true;
+        }
     }
 
     private void OnLearningEnabledChanged(object sender, RoutedEventArgs e)
@@ -577,10 +796,184 @@ public partial class MainWindow : Window
 
     private async void OnResetLearningClicked(object sender, RoutedEventArgs e)
     {
+        var confirmation = MessageBox.Show(
+            "Effacer tout l’apprentissage enregistré depuis le début ?\n\nAucun fichier OneDrive ne sera supprimé.",
+            "Tout effacer",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning,
+            MessageBoxResult.No);
+        if (confirmation != MessageBoxResult.Yes) return;
+
         await _learningService.ClearAsync();
         _learning.Clear();
         try { File.Delete(Path.Combine(_stateDirectory, "learning-v108.json")); } catch { }
-        LearningStatusText.Text = "Apprentissage effacé";
+        LearningStatusText.Text = "Tout l’apprentissage a été effacé.";
+    }
+
+    private void OnManageLearningClicked(object sender, RoutedEventArgs e)
+    {
+        var window = new Window
+        {
+            Title = "Gérer l’apprentissage Atlas Drop",
+            Owner = this,
+            Width = 620,
+            Height = 520,
+            MinWidth = 520,
+            MinHeight = 420,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Background = System.Windows.Media.Brushes.White
+        };
+
+        var root = new DockPanel { Margin = new Thickness(14) };
+        var title = new TextBlock
+        {
+            Text = "Coche les apprentissages à supprimer",
+            FontSize = 19,
+            FontWeight = FontWeights.Bold,
+            Margin = new Thickness(0, 0, 0, 8)
+        };
+        DockPanel.SetDock(title, Dock.Top);
+        root.Children.Add(title);
+
+        var help = new TextBlock
+        {
+            Text = "Les autres apprentissages seront conservés. Aucun fichier OneDrive ne sera touché.",
+            Foreground = System.Windows.Media.Brushes.DimGray,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 10)
+        };
+        DockPanel.SetDock(help, Dock.Top);
+        root.Children.Add(help);
+
+        var actions = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Margin = new Thickness(0, 10, 0, 0)
+        };
+        DockPanel.SetDock(actions, Dock.Bottom);
+
+        var deleteSelected = new Button
+        {
+            Content = "SUPPRIMER LA SÉLECTION",
+            Background = System.Windows.Media.Brushes.Firebrick,
+            Foreground = System.Windows.Media.Brushes.White
+        };
+        var close = new Button { Content = "FERMER" };
+        actions.Children.Add(deleteSelected);
+        actions.Children.Add(close);
+        root.Children.Add(actions);
+
+        var list = new StackPanel();
+        var groups = _learning
+            .GroupBy(entry => LearningFolderFromKey(entry.Key), StringComparer.OrdinalIgnoreCase)
+            .Where(group => !string.IsNullOrWhiteSpace(group.Key))
+            .OrderBy(group => group.Key, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        if (groups.Length == 0)
+        {
+            list.Children.Add(new TextBlock
+            {
+                Text = "Aucun apprentissage enregistré.",
+                Foreground = System.Windows.Media.Brushes.DimGray,
+                Margin = new Thickness(4)
+            });
+        }
+        else
+        {
+            foreach (var group in groups)
+            {
+                var tokens = group
+                    .Select(entry => LearningTokenFromKey(entry.Key))
+                    .Where(token => !string.IsNullOrWhiteSpace(token))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(token => token, StringComparer.OrdinalIgnoreCase)
+                    .Take(12);
+                list.Children.Add(new CheckBox
+                {
+                    Content = $"{ToOneDriveDisplayPath(group.Key)}\nMots : {string.Join(", ", tokens)}",
+                    Tag = group.Select(entry => entry.Key).ToArray(),
+                    Margin = new Thickness(3, 5, 3, 5),
+                    Padding = new Thickness(5),
+                    FontWeight = FontWeights.SemiBold
+                });
+            }
+        }
+
+        var scroll = new ScrollViewer
+        {
+            Content = list,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto
+        };
+        root.Children.Add(scroll);
+        window.Content = root;
+
+        deleteSelected.Click += (_, _) =>
+        {
+            var selectedKeys = list.Children
+                .OfType<CheckBox>()
+                .Where(checkBox => checkBox.IsChecked == true)
+                .SelectMany(checkBox => (string[])(checkBox.Tag ?? Array.Empty<string>()))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            if (selectedKeys.Length == 0)
+            {
+                MessageBox.Show("Coche au moins un apprentissage.", "Atlas Drop", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            foreach (var key in selectedKeys) _learning.Remove(key);
+            SaveLearningDictionary();
+            LearningStatusText.Text = $"{selectedKeys.Length} apprentissage(s) supprimé(s).";
+            window.Close();
+        };
+        close.Click += (_, _) => window.Close();
+        window.ShowDialog();
+    }
+
+    private void OnHistoryClicked(object sender, RoutedEventArgs e)
+    {
+        var history = LoadMoveHistory();
+        if (history.Count == 0)
+        {
+            MessageBox.Show("Aucun classement dans l’historique.", "Historique Atlas Drop", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var lines = history.Select(entry =>
+            $"{entry.TimestampUtc.ToLocalTime():dd/MM HH:mm}  •  {Path.GetFileName(entry.Target)}\n→ {ToOneDriveDisplayPath(entry.Destination)}");
+        MessageBox.Show(
+            string.Join("\n\n", lines),
+            "10 derniers classements",
+            MessageBoxButton.OK,
+            MessageBoxImage.Information);
+    }
+
+    private void SaveLearningDictionary()
+    {
+        try
+        {
+            File.WriteAllText(
+                Path.Combine(_stateDirectory, "learning-v108.json"),
+                JsonSerializer.Serialize(_learning));
+        }
+        catch
+        {
+            LearningStatusText.Text = "Impossible d’enregistrer la modification de l’apprentissage.";
+        }
+    }
+
+    private static string LearningFolderFromKey(string key)
+    {
+        var separator = key.IndexOf("=>", StringComparison.Ordinal);
+        return separator >= 0 ? key[(separator + 2)..] : string.Empty;
+    }
+
+    private static string LearningTokenFromKey(string key)
+    {
+        var separator = key.IndexOf("=>", StringComparison.Ordinal);
+        return separator > 0 ? key[..separator] : string.Empty;
     }
 
     private void OnReminderTick(object? sender, EventArgs e)
@@ -683,6 +1076,12 @@ public partial class MainWindow : Window
             MoveHereButton.Visibility = Visibility.Collapsed;
             RenamePanel.Visibility = Visibility.Collapsed;
             PostMovePanel.Visibility = Visibility.Visible;
+            BackButton.Visibility = Visibility.Collapsed;
+            _explorerPathTimer.Stop();
+            _undoSecondsRemaining = 10;
+            UndoMoveButton.Content = "ANNULER LE DÉPLACEMENT (10 s)";
+            UndoMoveButton.IsEnabled = true;
+            _undoTimer.Start();
             StatusText.Text = "Déplacement vérifié. Confirme maintenant le classement.";
         }
         catch (Exception ex)
@@ -695,6 +1094,7 @@ public partial class MainWindow : Window
     private void OnClassificationConfirmed(object sender, RoutedEventArgs e)
     {
         if (_pendingMove is null) return;
+        _undoTimer.Stop();
         ApplyConfirmedLearning(_pendingMove.Destination);
         SaveLastMove(_pendingMove, "CONFIRMED");
         _pendingMove = null;
@@ -706,6 +1106,7 @@ public partial class MainWindow : Window
     private async void OnClassificationRejected(object sender, RoutedEventArgs e)
     {
         if (_pendingMove is null) return;
+        _undoTimer.Stop();
         var move = _pendingMove;
         IsEnabled = false;
         StatusText.Text = "Restauration du fichier avant correction…";
@@ -958,10 +1359,37 @@ public partial class MainWindow : Window
     {
         try
         {
-            var audit = new { move.Source, move.Target, move.Destination, Status = status, TimestampUtc = DateTime.UtcNow };
+            var timestamp = DateTime.UtcNow;
+            var audit = new { move.Source, move.Target, move.Destination, Status = status, TimestampUtc = timestamp };
             File.WriteAllText(Path.Combine(_stateDirectory, "last-move-v108.json"), JsonSerializer.Serialize(audit));
+
+            if (!string.Equals(status, "PENDING_CONFIRMATION", StringComparison.OrdinalIgnoreCase))
+            {
+                var history = LoadMoveHistory();
+                history.Insert(0, new MoveHistoryEntry(move.Source, move.Target, move.Destination, status, timestamp));
+                File.WriteAllText(
+                    Path.Combine(_stateDirectory, "move-history-v110.json"),
+                    JsonSerializer.Serialize(history.Take(10).ToList()));
+            }
         }
         catch { }
+    }
+
+    private List<MoveHistoryEntry> LoadMoveHistory()
+    {
+        try
+        {
+            var path = Path.Combine(_stateDirectory, "move-history-v110.json");
+            if (!File.Exists(path)) return new List<MoveHistoryEntry>();
+            return JsonSerializer.Deserialize<List<MoveHistoryEntry>>(File.ReadAllText(path))
+                ?.OrderByDescending(entry => entry.TimestampUtc)
+                .Take(10)
+                .ToList() ?? new List<MoveHistoryEntry>();
+        }
+        catch
+        {
+            return new List<MoveHistoryEntry>();
+        }
     }
 
     private static string LearningKey(string token, string folder) => token.ToLowerInvariant() + "=>" + folder.ToLowerInvariant();
@@ -999,6 +1427,9 @@ public partial class MainWindow : Window
     {
         var health = documentTokens.Contains("santé") || documentTokens.Contains("sante");
         var healthFolder = folderTokens.Contains("santé") || folderTokens.Contains("sante");
+        var fiscal = documentTokens.Overlaps(new[] { "impot", "impôts", "impots", "fiscal", "fiscale", "revenu", "revenus" });
+        var fiscalFolder = folderTokens.Overlaps(new[] { "impot", "impôts", "impots", "fiscal", "finances" });
+        if (fiscal && fiscalFolder) return 0.32d;
         return health && healthFolder ? 0.25d : 0d;
     }
 
@@ -1017,6 +1448,19 @@ public partial class MainWindow : Window
             tokens.Add("sante");
             tokens.Add("médical");
             tokens.Add("medical");
+        }
+
+        var fiscalTerms = new HashSet<string>(
+            new[] { "impot", "impôts", "impots", "fiscal", "fiscale", "fiscaux", "revenu", "revenus", "imposition" },
+            StringComparer.OrdinalIgnoreCase);
+        if (tokens.Overlaps(fiscalTerms))
+        {
+            tokens.Add("impôt");
+            tokens.Add("impot");
+            tokens.Add("impôts");
+            tokens.Add("impots");
+            tokens.Add("fiscal");
+            tokens.Add("finances");
         }
     }
 
@@ -1238,8 +1682,8 @@ public partial class MainWindow : Window
         var maxWidthDip = Math.Max(MinWidth, workWidthDip - preferredRightGapDip - 24);
         var maxHeightDip = Math.Max(MinHeight, workHeightDip - 16);
 
-        Width = Math.Min(maxWidthDip, Math.Max(620, workWidthDip * .38));
-        Height = Math.Min(maxHeightDip, Math.Max(560, workHeightDip * .78));
+        Width = Math.Min(maxWidthDip, Math.Max(520, workWidthDip * .323));
+        Height = Math.Min(maxHeightDip, Math.Max(476, workHeightDip * .663));
 
         var widthPixels = (int)Math.Round(Width * monitor.ScaleX);
         var heightPixels = (int)Math.Round(Height * monitor.ScaleY);
@@ -1325,19 +1769,47 @@ public partial class MainWindow : Window
         return "OneDrive › " + string.Join(" › ", segments);
     }
 
+    private string ToOneDriveTreeDisplayPath(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || !IsUnderRoot(path))
+            return Path.GetFileName(path);
+
+        var relative = Path.GetRelativePath(_oneDriveRoot, path);
+        if (string.IsNullOrWhiteSpace(relative) || relative == ".")
+            return "📁 OneDrive";
+
+        var segments = relative.Split(
+            new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar },
+            StringSplitOptions.RemoveEmptyEntries);
+        var lines = new List<string> { "📁 OneDrive" };
+        for (var index = 0; index < segments.Length; index++)
+        {
+            var prefix = new string('　', index + 1) + (index == segments.Length - 1 ? "└ 🎯 " : "└ 📁 ");
+            lines.Add(prefix + segments[index]);
+        }
+        return string.Join(Environment.NewLine, lines);
+    }
+
     private void ResetOperation()
     {
         _closeTimer.Stop();
+        _explorerPathTimer.Stop();
+        _undoTimer.Stop();
         _explorerOpenRequestId++;
         _activePath = null; _proposedFolder = null; _analysis = null; _pendingMove = null; _busy = false;
         _decisionPath = DecisionPath.None; _initialSuggestedFolder = null; _lockedSourcePath = null; _trackedExplorerHwnd = null;
         _rejectedDestinations.Clear(); _learningCommitted = false; _moveInProgress = false;
-        _suggestions.Clear(); SuggestionList.ItemsSource = null; Height = 690;
+        _pendingVoiceExplanation = null;
+        VoiceRulePanel.Visibility = Visibility.Collapsed;
+        ExplainChoiceButton.Content = "🎤 EXPLIQUER MON CHOIX";
+        ExplainChoiceButton.IsEnabled = true;
+        _suggestions.Clear(); SuggestionList.ItemsSource = null; Height = 586;
         ItemNameText.Text = "En attente d’un clic molette…"; ProposedPathText.Text = "—"; ConfidenceText.Text = "";
         TrackedExplorerDestinationText.Text = "Ouverture de l’Explorateur…";
         RenameTextBox.Text = ""; AutoRenameStatusText.Text = ""; AutoRenameCheckBox.IsChecked = false;
         ExplorerRefinementPanel.Visibility = Visibility.Collapsed; PostMovePanel.Visibility = Visibility.Collapsed;
-        SuggestionPanel.Visibility = Visibility.Visible;
+        SuggestionPanel.Visibility = Visibility.Visible; MovePreviewPanel.Visibility = Visibility.Visible;
+        BackButton.Visibility = Visibility.Collapsed;
         DecisionButtons.Visibility = Visibility.Visible; MoveHereButton.Visibility = Visibility.Collapsed; RenamePanel.Visibility = Visibility.Visible;
         MoveHereButton.IsEnabled = false; YesButton.IsEnabled = false; NoButton.IsEnabled = false; IsEnabled = true;
     }
@@ -1356,12 +1828,14 @@ public partial class MainWindow : Window
         IReadOnlyList<DetectedDate> Dates,
         IReadOnlyList<int> Years);
     private sealed record PendingMove(string Source, string Target, string Destination, bool IsDirectory);
+    private sealed record MoveHistoryEntry(string Source, string Target, string Destination, string Status, DateTime TimestampUtc);
     private sealed record ExplorerWindowSnapshot(nint Hwnd, string? Path);
     private sealed record MonitorPlacement(NativeRect WorkArea, double ScaleX, double ScaleY);
     private enum DecisionPath { None, Exact, GoodBranch, WrongFolder }
 
     private const uint MonitorDefaultToNearest = 2;
     private const int MonitorDpiTypeEffective = 0;
+    private const int ShowWindowMaximized = 3;
 
     [StructLayout(LayoutKind.Sequential)]
     private struct NativePoint
@@ -1405,6 +1879,10 @@ public partial class MainWindow : Window
         int dpiType,
         out uint dpiX,
         out uint dpiY);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool ShowWindow(nint window, int command);
 
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]

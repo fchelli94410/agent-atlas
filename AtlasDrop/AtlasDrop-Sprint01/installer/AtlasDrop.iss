@@ -1,5 +1,5 @@
 #ifndef AppVersion
-  #define AppVersion "1.0.15"
+  #define AppVersion "1.1.0"
 #endif
 #define AppName "Atlas Drop"
 #define AppExeName "AtlasDrop.App.exe"
