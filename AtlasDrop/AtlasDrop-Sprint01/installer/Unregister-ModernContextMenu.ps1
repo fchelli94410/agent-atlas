@@ -31,12 +31,14 @@ try {
     if (Test-Path -LiteralPath $thumbprintPath) {
         $thumbprint = (Get-Content -LiteralPath $thumbprintPath -Raw).Trim()
         if ($thumbprint -match '^[0-9A-Fa-f]{40,64}$') {
-            Get-ChildItem Cert:\CurrentUser\TrustedPeople |
-                Where-Object { $_.Thumbprint -eq $thumbprint } |
-                ForEach-Object {
-                    Remove-Item -LiteralPath $_.PSPath -Force -ErrorAction Continue
-                    Write-AtlasLog "Certificat Atlas Drop retiré : $thumbprint"
-                }
+            foreach ($storePath in @('Cert:\LocalMachine\TrustedPeople', 'Cert:\CurrentUser\TrustedPeople')) {
+                Get-ChildItem $storePath -ErrorAction SilentlyContinue |
+                    Where-Object { $_.Thumbprint -eq $thumbprint } |
+                    ForEach-Object {
+                        Remove-Item -LiteralPath $_.PSPath -Force -ErrorAction Continue
+                        Write-AtlasLog "Certificat Atlas Drop retiré de $storePath : $thumbprint"
+                    }
+            }
         }
         Remove-Item -LiteralPath $thumbprintPath -Force -ErrorAction SilentlyContinue
     }
