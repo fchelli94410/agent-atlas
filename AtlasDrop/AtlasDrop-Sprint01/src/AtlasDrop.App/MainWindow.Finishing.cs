@@ -2,7 +2,9 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Documents;
 using System.Windows.Input;
+using System.Windows.Media;
 using System.Windows.Threading;
 
 namespace AtlasDrop.App;
@@ -12,6 +14,7 @@ public partial class MainWindow
     private bool _finishingTreeRefreshInProgress;
     private bool _voiceLevelSubscribed;
     private string? _returnSourceFolder;
+    private string? _lastHighlightedDestinationText;
 
     private void OnFinishingWindowLayoutUpdated(object? sender, EventArgs e)
     {
@@ -21,6 +24,7 @@ public partial class MainWindow
         if (UndoMoveButton.Visibility != Visibility.Collapsed)
             UndoMoveButton.Visibility = Visibility.Collapsed;
 
+        HighlightDestinationLeaf();
         EnsureVoiceLevelSubscription();
         var recording = _voiceService?.IsRecording == true;
         VoiceListeningVisual.Visibility = recording ? Visibility.Visible : Visibility.Collapsed;
@@ -33,6 +37,37 @@ public partial class MainWindow
         {
             VoiceLevelMeter.Value = 0d;
         }
+    }
+
+    private void HighlightDestinationLeaf()
+    {
+        var displayPath = ProposedPathText.Text ?? string.Empty;
+        if (string.Equals(displayPath, _lastHighlightedDestinationText, StringComparison.Ordinal))
+            return;
+
+        _lastHighlightedDestinationText = displayPath;
+        ProposedPathText.Inlines.Clear();
+
+        if (string.IsNullOrWhiteSpace(displayPath))
+            return;
+
+        var separator = " > ";
+        var separatorIndex = displayPath.LastIndexOf(separator, StringComparison.Ordinal);
+        if (separatorIndex < 0)
+        {
+            ProposedPathText.Inlines.Add(new Run(displayPath));
+            return;
+        }
+
+        var prefix = displayPath[..(separatorIndex + separator.Length)];
+        var leaf = displayPath[(separatorIndex + separator.Length)..];
+        ProposedPathText.Inlines.Add(new Run(prefix));
+        ProposedPathText.Inlines.Add(new Run(leaf)
+        {
+            FontWeight = FontWeights.ExtraBold,
+            Foreground = new SolidColorBrush(Color.FromRgb(21, 128, 61)),
+            Background = new SolidColorBrush(Color.FromRgb(220, 252, 231))
+        });
     }
 
     private void EnsureVoiceLevelSubscription()
