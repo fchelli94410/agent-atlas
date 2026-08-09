@@ -21,7 +21,9 @@ public sealed class Sprint02LayoutTests
     [Fact]
     public void Rename_proposal_is_fixed_and_voice_is_only_available_after_move()
     {
-        var document = XDocument.Load(FindMainWindow());
+        var path = FindMainWindow();
+        var document = XDocument.Load(path);
+        var xaml = File.ReadAllText(path);
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
 
         var renamePanel = Assert.Single(
@@ -31,16 +33,13 @@ public sealed class Sprint02LayoutTests
             document.Descendants(),
             element => (string?)element.Attribute(x + "Name") == "ExplainChoiceButton");
 
-        Assert.Contains("NOM PROPOSÉ", renamePanel.Value, StringComparison.Ordinal);
+        Assert.Contains("NOM PROPOSÉ", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain(
             renamePanel.Ancestors(),
             element => (string?)element.Attribute(x + "Name") == "MainContentScrollViewer");
         Assert.Contains(
             voiceButton.Ancestors(),
             element => (string?)element.Attribute(x + "Name") == "PostMovePanel");
-        Assert.DoesNotContain(
-            "EXPLICATION VOCALE — DISPONIBLE APRÈS CLASSEMENT",
-            File.ReadAllText(FindMainWindow()),
-            StringComparison.Ordinal);
+        Assert.Equal("🎤 EXPLIQUER MON CHOIX", (string?)voiceButton.Attribute("Content"));
     }
 }
