@@ -53,39 +53,55 @@
             </StackPanel>
         </DockPanel>
 
-        <Border x:Name="SelectedDestinationPanel" Grid.Row="1"
-                Background="#ECFDF3" BorderBrush="#4ADE80"
-                BorderThickness="1.5" CornerRadius="8" Padding="12" Margin="0,14,0,10">
-            <StackPanel>
-                <TextBlock Text="DOSSIER CHOISI" Foreground="#15803D"
-                           FontSize="11" FontWeight="Bold"/>
-                <TextBlock x:Name="ProposedPathText" Text="—" Margin="0,6,0,0"
-                           FontSize="14" FontWeight="Bold" TextWrapping="Wrap"/>
-                <StackPanel x:Name="SearchLoadingPanel" Orientation="Horizontal" Margin="0,8,0,0">
-                    <StackPanel.Style>
-                        <Style TargetType="StackPanel">
-                            <Setter Property="Visibility" Value="Collapsed"/>
-                            <Style.Triggers>
-                                <DataTrigger Binding="{Binding Text, ElementName=StatusText}" Value="Analyse en cours…">
-                                    <Setter Property="Visibility" Value="Visible"/>
-                                </DataTrigger>
-                                <DataTrigger Binding="{Binding Text, ElementName=StatusText}" Value="Clic détecté — analyse en cours…">
-                                    <Setter Property="Visibility" Value="Visible"/>
-                                </DataTrigger>
-                                <DataTrigger Binding="{Binding Text, ElementName=StatusText}" Value="Actualisation des dossiers et nouvelle analyse…">
-                                    <Setter Property="Visibility" Value="Visible"/>
-                                </DataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </StackPanel.Style>
-                    <ProgressBar x:Name="SearchLoadingProgress" Width="58" Height="4"
-                                 IsIndeterminate="True" VerticalAlignment="Center"/>
-                    <TextBlock Text="Recherche du meilleur emplacement…"
-                               Foreground="#657089" FontSize="11" Margin="9,0,0,0"
-                               VerticalAlignment="Center"/>
+        <StackPanel Grid.Row="1">
+            <Border x:Name="SelectedDestinationPanel"
+                    Background="#ECFDF3" BorderBrush="#4ADE80"
+                    BorderThickness="1.5" CornerRadius="8" Padding="12" Margin="0,14,0,8">
+                <StackPanel>
+                    <TextBlock Text="DOSSIER CHOISI" Foreground="#15803D"
+                               FontSize="11" FontWeight="Bold"/>
+                    <TextBlock x:Name="ProposedPathText" Text="—" Margin="0,6,0,0"
+                               FontSize="14" FontWeight="Bold" TextWrapping="Wrap"/>
+                    <StackPanel x:Name="SearchLoadingPanel" Orientation="Horizontal" Margin="0,8,0,0">
+                        <StackPanel.Style>
+                            <Style TargetType="StackPanel">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding Text, ElementName=StatusText}" Value="Analyse en cours…">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding Text, ElementName=StatusText}" Value="Clic détecté — analyse en cours…">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding Text, ElementName=StatusText}" Value="Actualisation des dossiers et nouvelle analyse…">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </StackPanel.Style>
+                        <ProgressBar x:Name="SearchLoadingProgress" Width="58" Height="4"
+                                     IsIndeterminate="True" VerticalAlignment="Center"/>
+                        <TextBlock Text="Recherche du meilleur emplacement…"
+                                   Foreground="#657089" FontSize="11" Margin="9,0,0,0"
+                                   VerticalAlignment="Center"/>
+                    </StackPanel>
                 </StackPanel>
-            </StackPanel>
-        </Border>
+            </Border>
+
+            <Border x:Name="RenamePanel" Background="White" BorderBrush="#D5DBE5"
+                    BorderThickness="1" CornerRadius="9" Padding="12" Margin="0,0,0,10">
+                <StackPanel>
+                    <TextBlock Text="NOM PROPOSÉ" Foreground="#657089"
+                               FontSize="11" FontWeight="Bold"/>
+                    <TextBox x:Name="RenameTextBox" Margin="0,6,0,0" Padding="8" FontSize="13"/>
+                    <CheckBox x:Name="AutoRenameCheckBox"
+                              Content="Appliquer ce renommage lors du déplacement"
+                              FontWeight="SemiBold" Margin="0,7,0,0"/>
+                    <TextBlock x:Name="AutoRenameStatusText" Foreground="#657089"
+                               Margin="0,4,0,0" TextWrapping="Wrap"/>
+                </StackPanel>
+            </Border>
+        </StackPanel>
 
         <Grid Grid.Row="2">
             <Border x:Name="SuggestionPanel" Background="White" BorderBrush="#CBD5E1"
@@ -239,34 +255,20 @@
             <Button x:Name="MoveHereButton" Content="DÉPOSER DANS CE DOSSIER"
                     Background="#17803D" Foreground="White" HorizontalAlignment="Stretch"
                     Visibility="Collapsed" IsEnabled="False" MinHeight="38"
-                    Margin="3,0,3,12" Click="OnMoveHere"/>
+                    Margin="3,0,3,10" Click="OnMoveHere"/>
 
             <Border x:Name="MovePreviewPanel" Background="#EFF6FF" BorderBrush="#93C5FD"
-                    BorderThickness="1" CornerRadius="9" Padding="13" Margin="3,0,3,12">
+                    BorderThickness="1" CornerRadius="9" Padding="12" Margin="3,0,3,10">
                 <StackPanel>
                     <TextBlock Text="ÉLÉMENT À DÉPLACER" Foreground="#1D4ED8"
                                FontSize="11" FontWeight="Bold"/>
                     <TextBlock Text="{Binding Text, ElementName=ItemNameText}"
-                               Margin="0,6,0,0" TextWrapping="Wrap" FontWeight="SemiBold"/>
+                               Margin="0,5,0,0" TextWrapping="Wrap" FontWeight="SemiBold"/>
                     <TextBlock x:Name="CurrentMovePreviewText" Visibility="Collapsed"/>
                 </StackPanel>
             </Border>
 
-            <Border x:Name="RenamePanel" Background="White" BorderBrush="#D5DBE5"
-                    BorderThickness="1" CornerRadius="9" Padding="13" Margin="3,0,3,12">
-                <StackPanel>
-                    <TextBlock Text="NOM PROPOSÉ" Foreground="#657089"
-                               FontSize="11" FontWeight="Bold"/>
-                    <TextBox x:Name="RenameTextBox" Margin="0,7,0,0" Padding="8" FontSize="13"/>
-                    <CheckBox x:Name="AutoRenameCheckBox"
-                              Content="Appliquer ce renommage lors du déplacement"
-                              FontWeight="SemiBold" Margin="0,8,0,0"/>
-                    <TextBlock x:Name="AutoRenameStatusText" Foreground="#657089"
-                               Margin="0,5,0,0" TextWrapping="Wrap"/>
-                </StackPanel>
-            </Border>
-
-            <UniformGrid x:Name="DecisionButtons" Columns="2" Margin="-3,0,-3,10">
+            <UniformGrid x:Name="DecisionButtons" Columns="2" Margin="-3,0,-3,8">
                 <Button x:Name="YesButton" Content="C’EST EXACT" IsEnabled="False"
                         Style="{StaticResource PrimaryDecisionButtonStyle}"
                         FontSize="12" Padding="3,8" Margin="3" Click="OnYes"/>
@@ -275,10 +277,10 @@
             </UniformGrid>
             <TextBlock x:Name="PathLengthStatusText" Foreground="#657089"
                        TextAlignment="Center" TextWrapping="Wrap"/>
-            <StackPanel x:Name="LearningControlsPanel" Margin="0,7,0,0">
+            <StackPanel x:Name="LearningControlsPanel" Margin="0,6,0,0">
                 <CheckBox x:Name="LearningEnabledCheckBox" Content="Apprentissage activé"
                           IsChecked="True" HorizontalAlignment="Left"/>
-                <WrapPanel HorizontalAlignment="Right" Margin="0,4,0,0">
+                <WrapPanel HorizontalAlignment="Right" Margin="0,3,0,0">
                     <Button x:Name="HistoryButton" Content="HISTORIQUE" MinHeight="30"
                             Padding="7,3" Click="OnHistoryClicked"/>
                     <Button x:Name="ManageLearningButton" Content="GÉRER APPRENTISSAGE"
@@ -288,11 +290,11 @@
                 </WrapPanel>
             </StackPanel>
             <TextBlock x:Name="LearningStatusText" Foreground="#657089" TextAlignment="Center"/>
-            <TextBlock x:Name="StatusText" Text="Atlas Drop fonctionne en arrière-plan." Margin="0,8,0,0"
+            <TextBlock x:Name="StatusText" Text="Atlas Drop fonctionne en arrière-plan." Margin="0,7,0,0"
                        TextAlignment="Center" Foreground="#657089" TextWrapping="Wrap"/>
             <Button x:Name="BackButton" Content="←  RETOUR"
                     Visibility="Collapsed" HorizontalAlignment="Left"
-                    MinHeight="28" Padding="8,4" Margin="0,9,0,0"
+                    MinHeight="28" Padding="8,4" Margin="0,8,0,0"
                     FontSize="11" Click="OnBack"/>
         </StackPanel>
     </Grid>
