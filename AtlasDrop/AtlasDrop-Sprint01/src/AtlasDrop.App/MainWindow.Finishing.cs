@@ -10,6 +10,7 @@ namespace AtlasDrop.App;
 public partial class MainWindow
 {
     private bool _finishingTreeRefreshInProgress;
+    private bool _voiceLevelSubscribed;
     private string? _returnSourceFolder;
 
     private void OnFinishingWindowLayoutUpdated(object? sender, EventArgs e)
@@ -19,6 +20,35 @@ public partial class MainWindow
 
         if (UndoMoveButton.Visibility != Visibility.Collapsed)
             UndoMoveButton.Visibility = Visibility.Collapsed;
+
+        EnsureVoiceLevelSubscription();
+        var recording = _voiceService?.IsRecording == true;
+        VoiceListeningVisual.Visibility = recording ? Visibility.Visible : Visibility.Collapsed;
+        if (recording)
+        {
+            if (!string.Equals(ExplainChoiceButton.Content?.ToString(), "■ TERMINER", StringComparison.Ordinal))
+                ExplainChoiceButton.Content = "■ TERMINER";
+        }
+        else
+        {
+            VoiceLevelMeter.Value = 0d;
+        }
+    }
+
+    private void EnsureVoiceLevelSubscription()
+    {
+        if (_voiceLevelSubscribed || _voiceService is null)
+            return;
+
+        _voiceService.AudioLevelChanged += OnVoiceLevelChanged;
+        _voiceLevelSubscribed = true;
+    }
+
+    private void OnVoiceLevelChanged(float level)
+    {
+        Dispatcher.BeginInvoke(
+            DispatcherPriority.Render,
+            new Action(() => VoiceLevelMeter.Value = Math.Clamp(level, 0f, 1f)));
     }
 
     private void OnConfirmClassificationPreview(object sender, MouseButtonEventArgs e)
