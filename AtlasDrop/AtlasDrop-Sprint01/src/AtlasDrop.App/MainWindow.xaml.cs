@@ -849,7 +849,7 @@ public partial class MainWindow : Window
         {
             _undoTimer.Stop();
             UndoMoveButton.IsEnabled = false;
-            UndoMoveButton.Content = "DÉLAI D’ANNULATION TERMINÉ";
+            UndoMoveButton.Visibility = Visibility.Collapsed;
             return;
         }
 
@@ -1196,6 +1196,7 @@ public partial class MainWindow : Window
             _explorerPathTimer.Stop();
             _undoSecondsRemaining = 10;
             UndoMoveButton.Content = "ANNULER LE DÉPLACEMENT (10 s)";
+            UndoMoveButton.Visibility = Visibility.Visible;
             UndoMoveButton.IsEnabled = true;
             _undoTimer.Start();
             StatusText.Text = "Déplacement vérifié. Confirme maintenant le classement.";
