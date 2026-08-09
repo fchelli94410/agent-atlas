@@ -429,7 +429,7 @@ public partial class MainWindow : Window
     {
         if (SuggestionList.SelectedItem is not SuggestionOption option) return;
         _proposedFolder = option.FullPath;
-        ProposedPathText.Text = ToOneDriveTreeDisplayPath(option.FullPath);
+        ProposedPathText.Text = ToOneDriveDisplayPath(option.FullPath);
         var confidenceLevel = option.Score >= 0.70d ? "ÉLEVÉE" : option.Score >= 0.45d ? "MOYENNE" : "FAIBLE";
         ConfidenceLevelText.Text = confidenceLevel;
         ConfidenceBadge.Background = confidenceLevel == "ÉLEVÉE"
