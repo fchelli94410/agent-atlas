@@ -1,4 +1,5 @@
 using System.IO;
+using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Threading;
 
@@ -7,6 +8,15 @@ namespace AtlasDrop.App;
 public partial class MainWindow
 {
     private bool _finishingTreeRefreshInProgress;
+
+    private void OnFinishingWindowLayoutUpdated(object? sender, EventArgs e)
+    {
+        if (_undoTimer.IsEnabled)
+            _undoTimer.Stop();
+
+        if (UndoMoveButton.Visibility != Visibility.Collapsed)
+            UndoMoveButton.Visibility = Visibility.Collapsed;
+    }
 
     private void OnFolderTreeLayoutUpdated(object? sender, EventArgs e)
     {
