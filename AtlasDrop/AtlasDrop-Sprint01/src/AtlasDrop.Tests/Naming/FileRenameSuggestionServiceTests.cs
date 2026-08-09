@@ -194,4 +194,27 @@ public sealed class FileRenameSuggestionServiceTests
             Path.GetFileNameWithoutExtension(
                 result.ProposedFileName).Length <= 150);
     }
+    [Fact]
+    public void Reliable_original_name_words_are_prioritized_before_ocr_metadata()
+    {
+        var result = Service().Suggest(
+            new FileRenameContext(
+                "2021-04-09 - AXA - contrat habitation.pdf",
+                DocumentType.Contract,
+                new DateTime(2021, 4, 9),
+                null,
+                null,
+                "COURBEVOIEType de bien",
+                "FRANCK CHELLI144 A",
+                null,
+                null));
+
+        Assert.StartsWith(
+            "2021-04-09 - AXA habitation - Contrat",
+            result.ProposedFileName);
+        Assert.Contains(
+            "mots fiables du nom source prioritaires",
+            result.Reasons);
+    }
+
 }
