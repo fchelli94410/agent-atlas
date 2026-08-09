@@ -52,9 +52,9 @@
                         </DockPanel>
                         <ListBox x:Name="SuggestionList" Visibility="Collapsed"
                                  SelectionChanged="OnSuggestionSelected" DisplayMemberPath="DisplayText"/>
-                        <TreeView x:Name="FolderTree" Margin="0,7,0,0" MaxHeight="360"
+                        <TreeView x:Name="FolderTree" Margin="0,7,0,0"
                                   Background="Transparent" BorderThickness="0"
-                                  ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                  ScrollViewer.VerticalScrollBarVisibility="Disabled"
                                   VirtualizingStackPanel.IsVirtualizing="True"
                                   VirtualizingStackPanel.VirtualizationMode="Recycling"/>
                         <TextBlock x:Name="ProposedPathText" Text="—" Visibility="Collapsed"/>
