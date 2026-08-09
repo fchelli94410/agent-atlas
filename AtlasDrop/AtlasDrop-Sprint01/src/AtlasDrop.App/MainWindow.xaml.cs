@@ -691,11 +691,15 @@ public partial class MainWindow : Window
         _lockedSourcePath = _activePath;
         _trackedExplorerHwnd = null;
         SuggestionPanel.Visibility = Visibility.Collapsed;
+        SelectedDestinationPanel.Visibility = Visibility.Collapsed;
         RenamePanel.Visibility = Visibility.Collapsed;
         MovePreviewPanel.Visibility = Visibility.Collapsed;
         ExplorerRefinementPanel.Visibility = Visibility.Visible;
         DecisionButtons.Visibility = Visibility.Collapsed;
         LearningControlsPanel.Visibility = Visibility.Collapsed;
+        ExplainChoiceButton.Visibility = Visibility.Collapsed;
+        PathLengthStatusText.Visibility = Visibility.Collapsed;
+        LearningStatusText.Visibility = Visibility.Collapsed;
         _compactExplorerMode = true;
         PositionTopRight();
         BackButton.Visibility = Visibility.Visible;
@@ -968,10 +972,14 @@ public partial class MainWindow : Window
         ExplorerRefinementPanel.Visibility = Visibility.Collapsed;
         MoveHereButton.Visibility = Visibility.Collapsed;
         SuggestionPanel.Visibility = Visibility.Visible;
+        SelectedDestinationPanel.Visibility = Visibility.Visible;
         RenamePanel.Visibility = Directory.Exists(_activePath ?? string.Empty) ? Visibility.Collapsed : Visibility.Visible;
         MovePreviewPanel.Visibility = Visibility.Visible;
         DecisionButtons.Visibility = Visibility.Visible;
         LearningControlsPanel.Visibility = Visibility.Visible;
+        ExplainChoiceButton.Visibility = Visibility.Visible;
+        PathLengthStatusText.Visibility = Visibility.Visible;
+        LearningStatusText.Visibility = Visibility.Visible;
         _compactExplorerMode = false;
         PositionTopRight();
         BackButton.Visibility = Visibility.Collapsed;
@@ -1289,6 +1297,11 @@ public partial class MainWindow : Window
             DecisionButtons.Visibility = Visibility.Collapsed;
             MoveHereButton.Visibility = Visibility.Collapsed;
             RenamePanel.Visibility = Visibility.Collapsed;
+            SelectedDestinationPanel.Visibility = Visibility.Visible;
+            ProposedPathText.Text = ToOneDriveDisplayPath(destination);
+            ExplainChoiceButton.Visibility = Visibility.Visible;
+            PathLengthStatusText.Visibility = Visibility.Visible;
+            LearningStatusText.Visibility = Visibility.Visible;
             PostMovePanel.Visibility = Visibility.Visible;
             PostMovePanel.BringIntoView();
             MainContentScrollViewer.ScrollToEnd();
@@ -1905,7 +1918,7 @@ public partial class MainWindow : Window
 
         Width = Math.Min(maxWidthDip, Math.Max(520, workWidthDip * .323));
         Height = _compactExplorerMode
-            ? Math.Min(maxHeightDip, 330)
+            ? Math.Min(maxHeightDip, 430)
             : Math.Min(maxHeightDip, Math.Max(680, workHeightDip * .94));
 
         var widthPixels = (int)Math.Round(Width * monitor.ScaleX);
@@ -2032,8 +2045,11 @@ public partial class MainWindow : Window
         TrackedExplorerDestinationText.Text = "Ouverture de l’Explorateur…";
         RenameTextBox.Text = ""; AutoRenameStatusText.Text = ""; AutoRenameCheckBox.IsChecked = false;
         ExplorerRefinementPanel.Visibility = Visibility.Collapsed; PostMovePanel.Visibility = Visibility.Collapsed;
-        SuggestionPanel.Visibility = Visibility.Visible; MovePreviewPanel.Visibility = Visibility.Visible;
+        SuggestionPanel.Visibility = Visibility.Visible; SelectedDestinationPanel.Visibility = Visibility.Visible; MovePreviewPanel.Visibility = Visibility.Visible;
         LearningControlsPanel.Visibility = Visibility.Visible;
+        ExplainChoiceButton.Visibility = Visibility.Visible;
+        PathLengthStatusText.Visibility = Visibility.Visible;
+        LearningStatusText.Visibility = Visibility.Visible;
         BackButton.Visibility = Visibility.Collapsed;
         DecisionButtons.Visibility = Visibility.Visible; MoveHereButton.Visibility = Visibility.Collapsed; RenamePanel.Visibility = Visibility.Visible;
         MoveHereButton.IsEnabled = false; YesButton.IsEnabled = false; IsEnabled = true;
