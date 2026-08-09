@@ -58,7 +58,6 @@ public partial class MainWindow : Window
     private readonly DateDetectionService _dateDetection = new();
     private readonly InvoiceDetectionService _invoiceDetection = new();
     private readonly FileRenameSuggestionService _renameService = new();
-    private readonly HighConfidenceAutoRenamePolicy _autoRenamePolicy = new();
     private readonly WindowsFileNamePolicy _fileNamePolicy = new();
     private readonly WindowsPathLengthPolicy _pathLengthPolicy = new();
     private readonly SafeFileMoveService _moveService = new();
@@ -557,6 +556,14 @@ public partial class MainWindow : Window
             Child = label
         };
         return new TreeViewItem { Header = highlight, Tag = path };
+    }
+
+    private void OnFolderTreePreviewMouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        if (e.Handled) return;
+        MainContentScrollViewer.ScrollToVerticalOffset(
+            MainContentScrollViewer.VerticalOffset - e.Delta);
+        e.Handled = true;
     }
 
     private async void OnFolderTreeNodeClicked(object sender, MouseButtonEventArgs e)
