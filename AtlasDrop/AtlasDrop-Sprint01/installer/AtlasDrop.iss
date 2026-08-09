@@ -1,5 +1,5 @@
 #ifndef AppVersion
-  #define AppVersion "1.1.6"
+  #define AppVersion "1.1.7"
 #endif
 #define AppName "Atlas Drop"
 #define AppExeName "AtlasDrop.App.exe"
@@ -33,8 +33,13 @@ Source: "Unregister-ModernContextMenu.ps1"; DestDir: "{app}"; Flags: ignoreversi
 ; Le pipeline télécharge ce redistribuable uniquement depuis Microsoft et vérifie sa signature.
 Source: "redist\vc_redist.x64.exe"; DestDir: "{tmp}"; DestName: "AtlasDrop-vc_redist.x64.exe"; Flags: deleteafterinstall
 
+[InstallDelete]
+; Supprime uniquement les anciens raccourcis officiels Atlas Drop avant de recréer le bon.
+Type: files; Name: "{commondesktop}\Atlas Drop.lnk"
+Type: files; Name: "{userdesktop}\Atlas Drop.lnk"
+
 [Icons]
-Name: "{autodesktop}\Atlas Drop"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"
+Name: "{userdesktop}\Atlas Drop"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"
 Name: "{userstartup}\Atlas Drop"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"
 
 [Registry]
