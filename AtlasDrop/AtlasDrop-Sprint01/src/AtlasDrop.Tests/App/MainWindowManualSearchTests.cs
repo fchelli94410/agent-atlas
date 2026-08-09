@@ -378,4 +378,20 @@ public sealed class MainWindowExplorerRefinementTests
         Assert.Contains("e.Handled = true", code, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void Back_from_confirmation_restores_the_file_without_learning()
+    {
+        var code = ReadCode();
+        var back = MethodBlock(
+            code,
+            "private async void OnBack",
+            "private void OnWindowPreviewKeyDown");
+
+        Assert.Contains("RestoreMove(move)", back, StringComparison.Ordinal);
+        Assert.Contains("BACK_AND_RESTORED", back, StringComparison.Ordinal);
+        Assert.Contains("_pendingMove = null", back, StringComparison.Ordinal);
+        Assert.DoesNotContain("ApplyConfirmedLearning", back, StringComparison.Ordinal);
+        Assert.Contains("BackButton.Visibility = Visibility.Visible", code, StringComparison.Ordinal);
+    }
+
 }
