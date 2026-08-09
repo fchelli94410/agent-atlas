@@ -58,6 +58,12 @@ public partial class MainWindow
         ConfirmClassificationButton.Click += OnFinishingClassificationConfirmedClicked;
         CorrectClassificationButton.Click -= OnClassificationRejected;
         CorrectClassificationButton.Click += OnFinishingReturnOneDriveClicked;
+
+        // La fenêtre de gestion 1.1.6 remplace la fenêtre historique pour offrir les
+        // trois actions demandées, correctement alignées et avec confirmation globale.
+        ManageLearningButton.Click -= OnManageLearningClicked;
+        ManageLearningButton.Click += OnFinishingManageLearningClicked;
+
         _finishingWorkflowHandlersAttached = true;
     }
 
@@ -196,6 +202,178 @@ public partial class MainWindow
     [DllImport("user32.dll", EntryPoint = "SetForegroundWindow")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool FinishingSetForegroundWindow(nint hWnd);
+
+    private void OnFinishingManageLearningClicked(object sender, RoutedEventArgs e)
+    {
+        var window = new Window
+        {
+            Title = "Gérer l’apprentissage Atlas Drop",
+            Owner = this,
+            Width = 660,
+            Height = 540,
+            MinWidth = 560,
+            MinHeight = 430,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Background = Brushes.White,
+            ShowInTaskbar = false
+        };
+
+        var root = new DockPanel { Margin = new Thickness(18) };
+
+        var title = new TextBlock
+        {
+            Text = "Gérer l’apprentissage",
+            FontSize = 20,
+            FontWeight = FontWeights.Bold,
+            Margin = new Thickness(0, 0, 0, 6)
+        };
+        DockPanel.SetDock(title, Dock.Top);
+        root.Children.Add(title);
+
+        var help = new TextBlock
+        {
+            Text = "Coche les apprentissages à supprimer. Les documents OneDrive ne sont jamais modifiés depuis cette fenêtre.",
+            Foreground = Brushes.DimGray,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 14)
+        };
+        DockPanel.SetDock(help, Dock.Top);
+        root.Children.Add(help);
+
+        var actions = new Grid { Margin = new Thickness(0, 14, 0, 0) };
+        actions.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        actions.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        actions.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        DockPanel.SetDock(actions, Dock.Bottom);
+
+        var clearAll = new Button
+        {
+            Content = "TOUT EFFACER",
+            Background = Brushes.Firebrick,
+            Foreground = Brushes.White,
+            MinHeight = 42,
+            Margin = new Thickness(0, 0, 7, 0)
+        };
+        var deleteSelected = new Button
+        {
+            Content = "SUPPRIMER LA SÉLECTION",
+            Background = Brushes.DarkOrange,
+            Foreground = Brushes.White,
+            MinHeight = 42,
+            Margin = new Thickness(7, 0, 7, 0)
+        };
+        var close = new Button
+        {
+            Content = "FERMER",
+            MinHeight = 42,
+            Margin = new Thickness(7, 0, 0, 0)
+        };
+
+        Grid.SetColumn(clearAll, 0);
+        Grid.SetColumn(deleteSelected, 1);
+        Grid.SetColumn(close, 2);
+        actions.Children.Add(clearAll);
+        actions.Children.Add(deleteSelected);
+        actions.Children.Add(close);
+        root.Children.Add(actions);
+
+        var list = new StackPanel();
+        PopulateFinishingLearningList(list);
+        var scroll = new ScrollViewer
+        {
+            Content = list,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled
+        };
+        root.Children.Add(scroll);
+        window.Content = root;
+
+        clearAll.Click += async (_, _) =>
+        {
+            var confirmation = MessageBox.Show(
+                window,
+                "Effacer tout l’apprentissage enregistré ?\n\nAucun fichier OneDrive ne sera supprimé ou déplacé.",
+                "Tout effacer",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning,
+                MessageBoxResult.No);
+            if (confirmation != MessageBoxResult.Yes)
+                return;
+
+            await _learningService.ClearAsync();
+            _learning.Clear();
+            try { File.Delete(Path.Combine(_stateDirectory, "learning-v108.json")); } catch { }
+            LearningStatusText.Text = "Tout l’apprentissage a été effacé.";
+            list.Children.Clear();
+            PopulateFinishingLearningList(list);
+        };
+
+        deleteSelected.Click += (_, _) =>
+        {
+            var selectedKeys = list.Children
+                .OfType<CheckBox>()
+                .Where(checkBox => checkBox.IsChecked == true)
+                .SelectMany(checkBox => (string[])(checkBox.Tag ?? Array.Empty<string>()))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+            if (selectedKeys.Length == 0)
+            {
+                MessageBox.Show(window, "Coche au moins un apprentissage.", "Atlas Drop", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            foreach (var key in selectedKeys)
+                _learning.Remove(key);
+
+            SaveLearningDictionary();
+            LearningStatusText.Text = $"{selectedKeys.Length} apprentissage(s) supprimé(s).";
+            list.Children.Clear();
+            PopulateFinishingLearningList(list);
+        };
+
+        close.Click += (_, _) => window.Close();
+        window.ShowDialog();
+    }
+
+    private void PopulateFinishingLearningList(StackPanel list)
+    {
+        var groups = _learning
+            .GroupBy(entry => LearningFolderFromKey(entry.Key), StringComparer.OrdinalIgnoreCase)
+            .Where(group => !string.IsNullOrWhiteSpace(group.Key))
+            .OrderBy(group => group.Key, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        if (groups.Length == 0)
+        {
+            list.Children.Add(new TextBlock
+            {
+                Text = "Aucun apprentissage enregistré.",
+                Foreground = Brushes.DimGray,
+                Margin = new Thickness(4, 8, 4, 8)
+            });
+            return;
+        }
+
+        foreach (var group in groups)
+        {
+            var tokens = group
+                .Select(entry => LearningTokenFromKey(entry.Key))
+                .Where(token => !string.IsNullOrWhiteSpace(token))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(token => token, StringComparer.OrdinalIgnoreCase)
+                .Take(12);
+
+            list.Children.Add(new CheckBox
+            {
+                Content = $"{ToOneDriveDisplayPath(group.Key)}\nMots : {string.Join(", ", tokens)}",
+                Tag = group.Select(entry => entry.Key).ToArray(),
+                Margin = new Thickness(3, 6, 3, 6),
+                Padding = new Thickness(7),
+                FontWeight = FontWeights.SemiBold
+            });
+        }
+    }
 
     private void HighlightDestinationLeaf()
     {
