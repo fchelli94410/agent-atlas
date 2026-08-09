@@ -778,6 +778,13 @@ public partial class MainWindow : Window
         {
             OnMoveHere(sender, e);
             e.Handled = true;
+            return;
+        }
+
+        if (e.Key == Key.Enter && DecisionButtons.Visibility == Visibility.Visible && YesButton.IsEnabled)
+        {
+            OnYes(sender, e);
+            e.Handled = true;
         }
     }
 
@@ -1356,11 +1363,14 @@ public partial class MainWindow : Window
             var audit = new { move.Source, move.Target, move.Destination, Status = status, TimestampUtc = timestamp };
             File.WriteAllText(Path.Combine(_stateDirectory, "last-move-v108.json"), JsonSerializer.Serialize(audit));
 
-            var history = LoadMoveHistory();
-            history.Insert(0, new MoveHistoryEntry(move.Source, move.Target, move.Destination, status, timestamp));
-            File.WriteAllText(
-                Path.Combine(_stateDirectory, "move-history-v110.json"),
-                JsonSerializer.Serialize(history.Take(10).ToList()));
+            if (!string.Equals(status, "PENDING_CONFIRMATION", StringComparison.OrdinalIgnoreCase))
+            {
+                var history = LoadMoveHistory();
+                history.Insert(0, new MoveHistoryEntry(move.Source, move.Target, move.Destination, status, timestamp));
+                File.WriteAllText(
+                    Path.Combine(_stateDirectory, "move-history-v110.json"),
+                    JsonSerializer.Serialize(history.Take(10).ToList()));
+            }
         }
         catch { }
     }
