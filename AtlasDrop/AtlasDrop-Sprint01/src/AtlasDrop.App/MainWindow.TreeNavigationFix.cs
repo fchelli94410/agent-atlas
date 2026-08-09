@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -29,7 +30,7 @@ public partial class MainWindow
         }
 
         var depth = GetDepth(_oneDriveRoot, destination);
-        if (!PathsEqualSafe(destination, _oneDriveRoot) && depth is < 1 or > MaxDepth)
+        if (!PathsEqualSafe(destination, _oneDriveRoot) && (depth < 1 || depth > MaxDepth))
         {
             StatusText.Text = "Ce dossier n’est pas une destination autorisée.";
             return;
