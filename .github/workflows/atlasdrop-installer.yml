@@ -104,16 +104,24 @@ jobs:
             & $signTool.FullName sign /fd SHA256 /f $pfx /p $passwordText $msix
             if ($LASTEXITCODE -ne 0) { throw 'SignTool failed.' }
 
-            # A self-signed development certificate is intentionally not promoted to a
-            # Trusted Root on the CI machine. SignTool must therefore fail only for
-            # untrusted-root trust-chain status; any signature/hash error remains fatal.
-            $verifyResult = & $signTool.FullName verify /pa /v $msix 2>&1
-            $verifyExit = $LASTEXITCODE
+            # GitHub's Windows PowerShell wrapper uses ErrorActionPreference=Stop.
+            # SignTool writes the expected self-signed trust warning to stderr, so
+            # temporarily allow native stderr and inspect its exact result ourselves.
+            $previousErrorActionPreference = $ErrorActionPreference
+            $ErrorActionPreference = 'Continue'
+            try {
+              $verifyResult = & $signTool.FullName verify /pa /v $msix 2>&1
+              $verifyExit = $LASTEXITCODE
+            }
+            finally {
+              $ErrorActionPreference = $previousErrorActionPreference
+            }
+
             $verifyResult | Write-Host
             if ($verifyExit -ne 0) {
               $verifyText = ($verifyResult | Out-String)
               if ($verifyText -notmatch 'not trusted by the trust provider' -or
-                  $verifyText -match 'SignTool Error: WinVerifyTrust returned error: 0x80096010' -or
+                  $verifyText -match 'WinVerifyTrust returned error: 0x80096010' -or
                   $verifyText -match 'The digital signature of the object did not verify') {
                 throw 'Signed sparse package verification failed for a reason other than the expected self-signed trust chain.'
               }
