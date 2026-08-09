@@ -37,130 +37,137 @@
 
         <Border x:Name="SelectedDestinationPanel" Grid.Row="1"
                 Background="#ECFDF3" BorderBrush="#4ADE80"
-                BorderThickness="1.5" CornerRadius="8" Padding="11" Margin="0,12,0,4">
+                BorderThickness="1.5" CornerRadius="8" Padding="12" Margin="0,14,0,10">
             <StackPanel>
                 <TextBlock Text="DOSSIER CHOISI" Foreground="#15803D"
                            FontSize="11" FontWeight="Bold"/>
-                <TextBlock x:Name="ProposedPathText" Text="—" Margin="0,5,0,0"
+                <TextBlock x:Name="ProposedPathText" Text="—" Margin="0,6,0,0"
                            FontSize="14" FontWeight="Bold" TextWrapping="Wrap"/>
             </StackPanel>
         </Border>
 
-        <ScrollViewer x:Name="MainContentScrollViewer" Grid.Row="2"
-                      VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Disabled">
-            <StackPanel>
-                <Border x:Name="SuggestionPanel" Background="White" BorderBrush="#D5DBE5"
-                        BorderThickness="1" CornerRadius="9" Padding="14" Margin="0,16,0,12">
-                    <StackPanel>
-                        <DockPanel>
-                            <Button x:Name="RefreshSuggestionButton" DockPanel.Dock="Right"
-                                    Content="↻  RELANCER" ToolTip="Relancer l’analyse et actualiser les dossiers"
-                                    MinHeight="26" Padding="7,2" Margin="6,0,0,0"
-                                    FontSize="11" Click="OnRefreshSuggestionClicked"/>
-                            <Border x:Name="ConfidenceBadge" DockPanel.Dock="Right" Background="#E8F0FF"
-                                    Margin="6,0,0,0"
-                                    CornerRadius="10" Padding="8,3">
-                                <TextBlock x:Name="ConfidenceLevelText" Text="EN ATTENTE"
-                                           Foreground="#1D4ED8" FontSize="11" FontWeight="Bold"/>
-                            </Border>
-                            <TextBlock Text="Dossier proposé" Foreground="#657089" FontWeight="SemiBold"
-                                       VerticalAlignment="Center"/>
-                        </DockPanel>
+        <Grid Grid.Row="2">
+            <Border x:Name="SuggestionPanel" Background="White" BorderBrush="#D5DBE5"
+                    BorderThickness="1" CornerRadius="9" Padding="14" Margin="0,2,0,10">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <DockPanel Grid.Row="0">
+                        <Button x:Name="RefreshSuggestionButton" DockPanel.Dock="Right"
+                                Content="↻  RELANCER" ToolTip="Relancer l’analyse et actualiser les dossiers"
+                                MinHeight="26" Padding="7,2" Margin="6,0,0,0"
+                                FontSize="11" Click="OnRefreshSuggestionClicked"/>
+                        <Border x:Name="ConfidenceBadge" DockPanel.Dock="Right" Background="#E8F0FF"
+                                Margin="6,0,0,0" CornerRadius="10" Padding="8,3">
+                            <TextBlock x:Name="ConfidenceLevelText" Text="EN ATTENTE"
+                                       Foreground="#1D4ED8" FontSize="11" FontWeight="Bold"/>
+                        </Border>
+                        <TextBlock Text="Dossier proposé" Foreground="#657089" FontWeight="SemiBold"
+                                   VerticalAlignment="Center"/>
                         <ListBox x:Name="SuggestionList" Visibility="Collapsed"
                                  SelectionChanged="OnSuggestionSelected" DisplayMemberPath="DisplayText"/>
-                        <TreeView x:Name="FolderTree" Margin="0,6,0,0"
+                    </DockPanel>
+                    <ScrollViewer x:Name="MainContentScrollViewer" Grid.Row="1" Margin="0,8,0,0"
+                                  VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Disabled">
+                        <TreeView x:Name="FolderTree"
                                   Background="Transparent" BorderThickness="0"
                                   ScrollViewer.VerticalScrollBarVisibility="Disabled"
                                   PreviewMouseWheel="OnFolderTreePreviewMouseWheel"
                                   VirtualizingStackPanel.IsVirtualizing="True"
                                   VirtualizingStackPanel.VirtualizationMode="Recycling"/>
-                        <TextBlock x:Name="ConfidenceText" Text="" Foreground="#657089"
-                                   Margin="0,7,0,0" TextWrapping="Wrap"/>
-                    </StackPanel>
-                </Border>
+                    </ScrollViewer>
+                    <TextBlock x:Name="ConfidenceText" Grid.Row="2" Text="" Foreground="#657089"
+                               Margin="0,8,0,0" TextWrapping="Wrap"/>
+                </Grid>
+            </Border>
 
-                <Border x:Name="MovePreviewPanel" Background="#EFF6FF" BorderBrush="#93C5FD"
-                        BorderThickness="1" CornerRadius="9" Padding="13" Margin="0,0,0,12">
-                    <StackPanel>
-                        <TextBlock Text="AVANT LE DÉPLACEMENT" Foreground="#1D4ED8"
-                                   FontSize="11" FontWeight="Bold"/>
-                        <TextBlock x:Name="CurrentMovePreviewText" Text="Fichier → destination"
-                                   Margin="0,5,0,0" TextWrapping="Wrap" FontWeight="SemiBold"/>
-                    </StackPanel>
-                </Border>
+            <Border x:Name="ExplorerRefinementPanel" Background="White" BorderBrush="#2563EB"
+                    BorderThickness="1.5" CornerRadius="9" Padding="14" Visibility="Collapsed"
+                    Margin="0,2,0,10">
+                <StackPanel>
+                    <TextBlock Text="1. Choisis le dossier dans l’Explorateur"
+                               FontSize="17" FontWeight="Bold"/>
+                    <TextBlock Text="La fenêtre OneDrive est ouverte en plein écran derrière Atlas Drop."
+                               FontSize="13" Foreground="#657089" Margin="0,6,0,12" TextWrapping="Wrap"/>
+                    <Border Background="#EFF6FF" BorderBrush="#93C5FD" BorderThickness="1"
+                            CornerRadius="8" Padding="11">
+                        <StackPanel>
+                            <TextBlock Text="2. DOSSIER ACTUELLEMENT OUVERT"
+                                       Foreground="#1D4ED8" FontSize="11" FontWeight="Bold"/>
+                            <TextBlock x:Name="TrackedExplorerDestinationText"
+                                       Text="Ouverture de l’Explorateur…"
+                                       FontSize="14" FontWeight="SemiBold" Margin="0,7,0,0"
+                                       TextWrapping="Wrap" LineHeight="20"/>
+                            <TextBlock x:Name="DestinationReadyText" Text="● Destination en attente"
+                                       Foreground="#D97706" Margin="0,8,0,0" FontWeight="SemiBold"/>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </Border>
 
-                <Border x:Name="ExplorerRefinementPanel" Background="White" BorderBrush="#2563EB"
-                        BorderThickness="1.5" CornerRadius="9" Padding="14" Visibility="Collapsed">
-                    <StackPanel>
-                        <TextBlock Text="1. Choisis le dossier dans l’Explorateur"
-                                   FontSize="17" FontWeight="Bold"/>
-                        <TextBlock Text="La fenêtre OneDrive est ouverte en plein écran derrière Atlas Drop."
-                                   FontSize="13" Foreground="#657089" Margin="0,5,0,10" TextWrapping="Wrap"/>
-                        <Border Background="#EFF6FF" BorderBrush="#93C5FD" BorderThickness="1"
-                                CornerRadius="8" Padding="10">
-                            <StackPanel>
-                                <TextBlock Text="2. DOSSIER ACTUELLEMENT OUVERT"
-                                           Foreground="#1D4ED8" FontSize="11" FontWeight="Bold"/>
-                                <TextBlock x:Name="TrackedExplorerDestinationText"
-                                           Text="Ouverture de l’Explorateur…"
-                                           FontSize="14" FontWeight="SemiBold" Margin="0,6,0,0"
-                                           TextWrapping="Wrap" LineHeight="20"/>
-                                <TextBlock x:Name="DestinationReadyText" Text="● Destination en attente"
-                                           Foreground="#D97706" Margin="0,7,0,0" FontWeight="SemiBold"/>
-                            </StackPanel>
-                        </Border>
-                    </StackPanel>
-                </Border>
-
-                <Border x:Name="PostMovePanel" Background="#ECFDF3" BorderBrush="#17803D"
-                        BorderThickness="1" CornerRadius="8" Padding="13" Visibility="Collapsed"
-                        Margin="0,12,0,0">
-                    <StackPanel>
-                        <TextBlock Text="Classement réussi. Le classement est-il conforme ?"
-                                   FontWeight="Bold" TextAlignment="Center" TextWrapping="Wrap"/>
-                        <UniformGrid Columns="2" Margin="-4,6,-4,0">
-                            <Button x:Name="ConfirmClassificationButton" Content="OUI, CONFIRMER"
-                                    Background="#17803D" Foreground="White"
-                                    Click="OnClassificationConfirmed"/>
-                            <Button x:Name="CorrectClassificationButton" Content="NON, CORRIGER"
-                                    Background="#D97706" Foreground="White"
-                                    Click="OnClassificationRejected"/>
-                        </UniformGrid>
-                        <Button x:Name="UndoMoveButton" Content="ANNULER LE DÉPLACEMENT (10 s)"
-                                Background="#B91C1C" Foreground="White"
+            <Border x:Name="PostMovePanel" Background="#ECFDF3" BorderBrush="#17803D"
+                    BorderThickness="1" CornerRadius="8" Padding="14" Visibility="Collapsed"
+                    Margin="0,2,0,10">
+                <StackPanel>
+                    <TextBlock Text="Classement réussi. Le classement est-il conforme ?"
+                               FontWeight="Bold" TextAlignment="Center" TextWrapping="Wrap"/>
+                    <UniformGrid Columns="2" Margin="-4,8,-4,0">
+                        <Button x:Name="ConfirmClassificationButton" Content="OUI, CONFIRMER"
+                                Background="#17803D" Foreground="White"
+                                Click="OnClassificationConfirmed"/>
+                        <Button x:Name="CorrectClassificationButton" Content="NON, CORRIGER"
+                                Background="#D97706" Foreground="White"
                                 Click="OnClassificationRejected"/>
-                        <Button x:Name="ExplainChoiceButton"
-                                Content="🎤 EXPLIQUER MON CHOIX"
-                                Tag="EXPLICATION VOCALE — DISPONIBLE APRÈS CLASSEMENT"
-                                Background="#6D28D9" Foreground="White" IsEnabled="False"
-                                MinHeight="34" Padding="7,5" Margin="4,8,4,4"
-                                Click="OnExplainChoiceClicked"/>
-                        <Border x:Name="VoiceRulePanel" Visibility="Collapsed" Background="#F5F3FF"
-                                BorderBrush="#A78BFA" BorderThickness="1" CornerRadius="7"
-                                Padding="9" Margin="4,4,4,0">
-                            <StackPanel>
-                                <TextBlock x:Name="VoiceStatusText" Text="Écoute…"
-                                           Foreground="#5B21B6" FontWeight="SemiBold" TextWrapping="Wrap"/>
-                                <TextBlock x:Name="VoiceTranscriptText" Margin="0,4,0,0" TextWrapping="Wrap"/>
-                                <TextBlock x:Name="VoiceRulePreviewText" Margin="0,4,0,0"
-                                           FontWeight="Bold" TextWrapping="Wrap"/>
-                                <UniformGrid Columns="2" Margin="-3,4,-3,0">
-                                    <Button Content="ENREGISTRER LA RÈGLE" Background="#17803D"
-                                            Foreground="White" Click="OnConfirmVoiceRuleClicked"/>
-                                    <Button Content="IGNORER" Click="OnCancelVoiceRuleClicked"/>
-                                </UniformGrid>
-                            </StackPanel>
-                        </Border>
-                    </StackPanel>
-                </Border>
-            </StackPanel>
-        </ScrollViewer>
+                    </UniformGrid>
+                    <Button x:Name="UndoMoveButton" Content="ANNULER LE DÉPLACEMENT (10 s)"
+                            Background="#B91C1C" Foreground="White"
+                            Click="OnClassificationRejected"/>
+                    <Button x:Name="ExplainChoiceButton"
+                            Content="🎤 EXPLIQUER MON CHOIX"
+                            Tag="EXPLICATION VOCALE — DISPONIBLE APRÈS CLASSEMENT"
+                            Background="#6D28D9" Foreground="White" IsEnabled="False"
+                            MinHeight="34" Padding="7,5" Margin="4,10,4,4"
+                            Click="OnExplainChoiceClicked"/>
+                    <Border x:Name="VoiceRulePanel" Visibility="Collapsed" Background="#F5F3FF"
+                            BorderBrush="#A78BFA" BorderThickness="1" CornerRadius="7"
+                            Padding="10" Margin="4,5,4,0">
+                        <StackPanel>
+                            <TextBlock x:Name="VoiceStatusText" Text="Écoute…"
+                                       Foreground="#5B21B6" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                            <TextBlock x:Name="VoiceTranscriptText" Margin="0,5,0,0" TextWrapping="Wrap"/>
+                            <TextBlock x:Name="VoiceRulePreviewText" Margin="0,5,0,0"
+                                       FontWeight="Bold" TextWrapping="Wrap"/>
+                            <UniformGrid Columns="2" Margin="-3,5,-3,0">
+                                <Button Content="ENREGISTRER LA RÈGLE" Background="#17803D"
+                                        Foreground="White" Click="OnConfirmVoiceRuleClicked"/>
+                                <Button Content="IGNORER" Click="OnCancelVoiceRuleClicked"/>
+                            </UniformGrid>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </Border>
+        </Grid>
 
-        <StackPanel Grid.Row="3" Margin="0,12,0,0">
+        <StackPanel Grid.Row="3" Margin="0,8,0,0">
             <Button x:Name="MoveHereButton" Content="DÉPOSER DANS CE DOSSIER"
                     Background="#17803D" Foreground="White" HorizontalAlignment="Stretch"
                     Visibility="Collapsed" IsEnabled="False" MinHeight="38"
-                    Margin="3,0,3,9" Click="OnMoveHere"/>
+                    Margin="3,0,3,12" Click="OnMoveHere"/>
+
+            <Border x:Name="MovePreviewPanel" Background="#EFF6FF" BorderBrush="#93C5FD"
+                    BorderThickness="1" CornerRadius="9" Padding="13" Margin="3,0,3,12">
+                <StackPanel>
+                    <TextBlock Text="ÉLÉMENT À DÉPLACER" Foreground="#1D4ED8"
+                               FontSize="11" FontWeight="Bold"/>
+                    <TextBlock Text="{Binding Text, ElementName=ItemNameText}"
+                               Margin="0,6,0,0" TextWrapping="Wrap" FontWeight="SemiBold"/>
+                    <TextBlock x:Name="CurrentMovePreviewText" Visibility="Collapsed"/>
+                </StackPanel>
+            </Border>
+
             <Border x:Name="RenamePanel" Background="White" BorderBrush="#D5DBE5"
                     BorderThickness="1" CornerRadius="9" Padding="13" Margin="3,0,3,12">
                 <StackPanel>
@@ -174,6 +181,7 @@
                                Margin="0,5,0,0" TextWrapping="Wrap"/>
                 </StackPanel>
             </Border>
+
             <UniformGrid x:Name="DecisionButtons" Columns="2" Margin="-3,0,-3,10">
                 <Button x:Name="YesButton" Content="C’EST EXACT" IsEnabled="False"
                         Background="#17803D" Foreground="White" FontSize="12"
