@@ -131,6 +131,7 @@
                                 Click="OnClassificationRejected"/>
                         <Button x:Name="ExplainChoiceButton"
                                 Content="🎤 EXPLIQUER MON CHOIX"
+                                Tag="EXPLICATION VOCALE — DISPONIBLE APRÈS CLASSEMENT"
                                 Background="#6D28D9" Foreground="White" IsEnabled="False"
                                 MinHeight="34" Padding="7,5" Margin="4,8,4,4"
                                 Click="OnExplainChoiceClicked"/>
