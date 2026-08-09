@@ -25,21 +25,22 @@ public sealed class FileRenameSuggestionService
 
     private static readonly Regex JunkNameRegex =
         new(
-            @"^(scan|document|document\d+|image|img|file|fichier|new document|nouveau document)(\s*\(\d+\))?$",
+            @"^(scan|document|document\d+|image|img|invoice|facture|file|fichier|new document|nouveau document)(\s*\(\d+\))?$",
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     private static readonly Regex SourceWordRegex =
         new(@"[\p{L}][\p{L}\p{N}'’]{1,30}", RegexOptions.Compiled);
 
-    // Uniquement les mots réellement génériques sont ignorés. Les mots métier déjà
-    // présents dans le nom (courrier, facture, contrat, relevé, etc.) sont une preuve
-    // utilisateur forte et doivent être conservés en priorité.
+    // Les libellés documentaires génériques restent filtrés pour éviter les doublons,
+    // sauf « courrier » : le test réel a montré que ce mot du nom source est une information
+    // utile qui doit être conservée lorsque l'utilisateur l'a lui-même nommé ainsi.
     private static readonly HashSet<string> SourceStopWords =
         new(
             new[]
             {
-                "scan", "document", "image", "img", "file", "fichier",
-                "nouveau", "new", "copie", "page"
+                "scan", "document", "image", "invoice", "facture", "file", "fichier",
+                "nouveau", "new", "contrat", "devis", "rapport", "relevé", "releve",
+                "email", "reçu", "recu", "archive", "copie", "page"
             },
             StringComparer.OrdinalIgnoreCase);
 
@@ -81,17 +82,18 @@ public sealed class FileRenameSuggestionService
             !string.IsNullOrWhiteSpace(context.Detail) ||
             !string.IsNullOrWhiteSpace(context.Reference);
 
-        // Le nom choisi par l'utilisateur est la première source de vérité.
-        if (sourceKeywords.Count > 0 && hasExtractedMetadata)
-        {
-            parts.Add(string.Join(' ', sourceKeywords));
-            reasons.Add("mots fiables du nom source prioritaires");
-        }
-
+        // Une date considérée fiable garde le format historique attendu, puis les mots
+        // réellement utiles du nom source arrivent avant les métadonnées OCR.
         if (!string.IsNullOrWhiteSpace(datePart))
         {
             parts.Add(datePart);
             reasons.Add("date suffisamment fiable intégrée");
+        }
+
+        if (sourceKeywords.Count > 0 && hasExtractedMetadata)
+        {
+            parts.Add(string.Join(' ', sourceKeywords));
+            reasons.Add("mots fiables du nom source prioritaires");
         }
 
         var typePart = GetDocumentTypeLabel(context.DocumentType);
@@ -196,9 +198,19 @@ public sealed class FileRenameSuggestionService
         if (context.Year is null)
             return null;
 
-        // Un simple mois/année ou une année isolée trouvée dans le contenu peut être une
-        // date de naissance, d'ancien contrat ou de référence. On ne l'ajoute que si elle
-        // était déjà présente dans le nom source.
+        // Les documents structurés (facture, contrat, relevé...) gardent le comportement
+        // validé : année/mois détectés peuvent être utilisés sans inventer de jour.
+        if (StructuredDocumentTypes.Contains(context.DocumentType))
+        {
+            if (context.Month is >= 1 and <= 12)
+                return $"{context.Year:0000}-{context.Month:00}";
+
+            return $"{context.Year:0000}";
+        }
+
+        // Pour un courrier ou un document libre, une date isolée du contenu peut être une
+        // date de naissance ou une référence : elle n'est conservée que si elle figurait
+        // déjà dans le nom source.
         if (!OriginalContainsYear(originalBase, context.Year.Value))
             return null;
 
