@@ -68,16 +68,19 @@ public sealed class Sprint11EndToEndContractTests
     }
 
     [Fact]
-    public void Confirmation_returns_to_the_original_desktop_or_Explorer_folder()
+    public void Confirmation_precedes_return_onedrive_and_explorer_is_brought_behind_atlas()
     {
         var xaml = Read(Path.Combine("AtlasDrop.App", "MainWindow.xaml"));
         var finishing = Read(Path.Combine("AtlasDrop.App", "MainWindow.Finishing.cs"));
 
         Assert.Contains("PreviewMouseLeftButtonDown=\"OnConfirmClassificationPreview\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("Path.GetDirectoryName(_pendingMove.Source)", finishing, StringComparison.Ordinal);
-        Assert.Contains("Environment.SpecialFolder.DesktopDirectory", finishing, StringComparison.Ordinal);
-        Assert.Contains("ShowDesktop()", finishing, StringComparison.Ordinal);
-        Assert.Contains("OpenExplorerAndTrackAsync(sourceFolder)", finishing, StringComparison.Ordinal);
+        Assert.Contains("ConfirmClassificationButton.Click -= OnClassificationConfirmed", finishing, StringComparison.Ordinal);
+        Assert.Contains("ConfirmClassificationButton.Click += OnFinishingClassificationConfirmedClicked", finishing, StringComparison.Ordinal);
+        Assert.Contains("CorrectClassificationButton.Visibility = _finishingClassificationConfirmed", finishing, StringComparison.Ordinal);
+        Assert.Contains("ExplainChoiceButton.Visibility = _finishingClassificationConfirmed", finishing, StringComparison.Ordinal);
+        Assert.Contains("BringExplorerImmediatelyBehindAtlasAsync(move.Destination)", finishing, StringComparison.Ordinal);
+        Assert.Contains("FinishingSetForegroundWindow(hwnd)", finishing, StringComparison.Ordinal);
+        Assert.Contains("Topmost = true", finishing, StringComparison.Ordinal);
     }
 
     [Fact]
