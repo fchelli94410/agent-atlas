@@ -184,10 +184,32 @@
                         <StackPanel>
                             <TextBlock x:Name="VoiceStatusText" Text="Écoute…"
                                        Foreground="#5B21B6" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                            <Border x:Name="VoiceListeningVisual" Visibility="Collapsed"
+                                    Background="#EDE9FE" CornerRadius="6" Padding="9" Margin="0,7,0,0">
+                                <StackPanel>
+                                    <TextBlock Text="Écoute en cours…" Foreground="#5B21B6"
+                                               FontWeight="Bold"/>
+                                    <ProgressBar x:Name="VoiceLevelMeter" Minimum="0" Maximum="1" Value="0"
+                                                 Height="7" Margin="0,7,0,0"/>
+                                    <TextBlock Text="Parle normalement puis clique TERMINER pour arrêter."
+                                               Foreground="#657089" FontSize="11" Margin="0,6,0,0"
+                                               TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </Border>
                             <TextBlock x:Name="VoiceTranscriptText" Margin="0,5,0,0" TextWrapping="Wrap"/>
                             <TextBlock x:Name="VoiceRulePreviewText" Margin="0,5,0,0"
                                        FontWeight="Bold" TextWrapping="Wrap"/>
-                            <UniformGrid Columns="2" Margin="-3,5,-3,0">
+                            <UniformGrid x:Name="VoiceRuleActionsPanel" Columns="2" Margin="-3,5,-3,0">
+                                <UniformGrid.Style>
+                                    <Style TargetType="UniformGrid">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding Text, ElementName=VoiceRulePreviewText}" Value="">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </UniformGrid.Style>
                                 <Button Content="ENREGISTRER LA RÈGLE" Background="#17803D"
                                         Foreground="White" Click="OnConfirmVoiceRuleClicked"/>
                                 <Button Content="IGNORER" Click="OnCancelVoiceRuleClicked"/>
