@@ -70,6 +70,8 @@ public partial class MainWindow : Window
     private readonly DispatcherTimer _undoTimer = new() { Interval = TimeSpan.FromSeconds(1) };
     private int _undoSecondsRemaining;
     private bool _preparingRename;
+    private LocalVoiceExplanationService? _voiceService;
+    private string? _pendingVoiceExplanation;
     private readonly FolderScoringService _folderScoring = new(new TextNormalizer(), MaxDepth);
     private readonly string _oneDriveRoot;
     private readonly string _stateDirectory;
@@ -103,6 +105,7 @@ public partial class MainWindow : Window
         _options = new AtlasDropOptions { OneDriveRoot = _oneDriveRoot, MaxSuggestedDepth = MaxDepth };
         _stateDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AtlasDrop");
         Directory.CreateDirectory(_stateDirectory);
+        _voiceService = new LocalVoiceExplanationService(_stateDirectory);
         LoadLearning();
         _folders = LoadOrBuildIndex();
         RenameTextBox.TextChanged += OnUserTextChanged;
@@ -604,6 +607,112 @@ public partial class MainWindow : Window
         _lastActivityUtc = DateTime.UtcNow;
         _reminderShown = false;
         _ = Task.Delay(900).ContinueWith(_ => Dispatcher.BeginInvoke(() => _isUserTyping = false));
+    }
+
+    private async void OnExplainChoiceClicked(object sender, RoutedEventArgs e)
+    {
+        if (_pendingMove is null || _voiceService is null) return;
+
+        VoiceRulePanel.Visibility = Visibility.Visible;
+        if (!_voiceService.IsRecording)
+        {
+            try
+            {
+                _voiceService.StartRecording();
+                ExplainChoiceButton.Content = "■ ARRÊTER ET ANALYSER";
+                VoiceStatusText.Text = "🎤 Je t’écoute. Explique simplement pourquoi ce fichier va dans ce dossier.";
+                VoiceTranscriptText.Text = string.Empty;
+                VoiceRulePreviewText.Text = string.Empty;
+            }
+            catch (Exception ex)
+            {
+                VoiceStatusText.Text = "Microphone indisponible : vérifie l’autorisation Microphone de Windows. " + ex.Message;
+            }
+            return;
+        }
+
+        ExplainChoiceButton.IsEnabled = false;
+        ExplainChoiceButton.Content = "ANALYSE EN COURS…";
+        try
+        {
+            var progress = new Progress<string>(message => VoiceStatusText.Text = message);
+            var transcription = await _voiceService.StopAndTranscribeAsync(progress);
+            if (string.IsNullOrWhiteSpace(transcription))
+            {
+                VoiceStatusText.Text = "Aucune phrase comprise. Clique sur le micro pour réessayer.";
+                return;
+            }
+
+            _pendingVoiceExplanation = transcription;
+            var tokens = ExtractVoiceLearningTokens(transcription);
+            VoiceStatusText.Text = "Voici ce qu’Atlas Drop a compris. Confirme avant tout apprentissage.";
+            VoiceTranscriptText.Text = $"« {transcription} »";
+            VoiceRulePreviewText.Text = tokens.Length == 0
+                ? "Aucun mot suffisamment précis détecté."
+                : $"Règle proposée : {string.Join(", ", tokens)}  →  {ToOneDriveDisplayPath(_pendingMove.Destination)}";
+        }
+        catch (Exception ex)
+        {
+            VoiceStatusText.Text = "Analyse vocale impossible : " + ex.Message + " Tu peux réessayer sans modifier le classement.";
+        }
+        finally
+        {
+            ExplainChoiceButton.IsEnabled = true;
+            ExplainChoiceButton.Content = "🎤 EXPLIQUER MON CHOIX";
+        }
+    }
+
+    private void OnConfirmVoiceRuleClicked(object sender, RoutedEventArgs e)
+    {
+        if (_pendingMove is null || string.IsNullOrWhiteSpace(_pendingVoiceExplanation)) return;
+
+        var tokens = ExtractVoiceLearningTokens(_pendingVoiceExplanation);
+        if (tokens.Length == 0)
+        {
+            VoiceStatusText.Text = "Règle non enregistrée : aucun mot suffisamment précis.";
+            return;
+        }
+
+        foreach (var token in tokens)
+        {
+            var key = LearningKey(token, _pendingMove.Destination);
+            _learning.TryGetValue(key, out var score);
+            _learning[key] = Math.Clamp(score + StrongPositiveLearningWeight, -20, 50);
+        }
+
+        SaveLearningDictionary();
+        VoiceStatusText.Text = "✓ Explication enregistrée dans l’apprentissage.";
+        VoiceRulePreviewText.Text = string.Empty;
+        _pendingVoiceExplanation = null;
+    }
+
+    private void OnCancelVoiceRuleClicked(object sender, RoutedEventArgs e)
+    {
+        _pendingVoiceExplanation = null;
+        VoiceRulePanel.Visibility = Visibility.Collapsed;
+        VoiceTranscriptText.Text = string.Empty;
+        VoiceRulePreviewText.Text = string.Empty;
+        VoiceStatusText.Text = "Explication ignorée. Aucun apprentissage ajouté.";
+    }
+
+    private static string[] ExtractVoiceLearningTokens(string explanation)
+    {
+        var tokens = Tokenize(explanation);
+        ExpandBusinessTokens(tokens);
+        var stopWords = new HashSet<string>(
+            new[]
+            {
+                "dans", "pour", "avec", "parce", "cette", "fichier", "dossier",
+                "mettre", "rangé", "range", "cela", "celui", "donc", "ici", "chez",
+                "sont", "est", "une", "des", "les", "mon", "mes", "sur"
+            },
+            StringComparer.OrdinalIgnoreCase);
+        return tokens
+            .Where(token => !stopWords.Contains(token))
+            .OrderByDescending(token => token.Length)
+            .ThenBy(token => token, StringComparer.OrdinalIgnoreCase)
+            .Take(10)
+            .ToArray();
     }
 
     private void OnExplorerPathTimerTick(object? sender, EventArgs e)
@@ -1680,6 +1789,10 @@ public partial class MainWindow : Window
         _activePath = null; _proposedFolder = null; _analysis = null; _pendingMove = null; _busy = false;
         _decisionPath = DecisionPath.None; _initialSuggestedFolder = null; _lockedSourcePath = null; _trackedExplorerHwnd = null;
         _rejectedDestinations.Clear(); _learningCommitted = false; _moveInProgress = false;
+        _pendingVoiceExplanation = null;
+        VoiceRulePanel.Visibility = Visibility.Collapsed;
+        ExplainChoiceButton.Content = "🎤 EXPLIQUER MON CHOIX";
+        ExplainChoiceButton.IsEnabled = true;
         _suggestions.Clear(); SuggestionList.ItemsSource = null; Height = 586;
         ItemNameText.Text = "En attente d’un clic molette…"; ProposedPathText.Text = "—"; ConfidenceText.Text = "";
         TrackedExplorerDestinationText.Text = "Ouverture de l’Explorateur…";
