@@ -123,6 +123,7 @@
                     <UniformGrid Columns="2" Margin="-4,8,-4,0">
                         <Button x:Name="ConfirmClassificationButton" Content="OUI, CONFIRMER"
                                 Background="#17803D" Foreground="White"
+                                PreviewMouseLeftButtonDown="OnConfirmClassificationPreview"
                                 Click="OnClassificationConfirmed"/>
                         <Button x:Name="CorrectClassificationButton" Content="RETOUR ONEDRIVE"
                                 Tag="NON, CORRIGER"
