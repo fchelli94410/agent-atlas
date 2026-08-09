@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.RegularExpressions;
 using AtlasDrop.Core.Analysis;
 using AtlasDrop.Core.FileSystem;
@@ -23,21 +24,35 @@ public sealed class FileRenameSuggestionService
 
     private static readonly Regex JunkNameRegex =
         new(
-            @"^(scan|document|document\d+|image|img|invoice|facture|file|fichier|new document|nouveau document)(\s*\(\d+\))?$",
+            @"^(scan|document|document\d+|image|img|file|fichier|new document|nouveau document)(\s*\(\d+\))?$",
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     private static readonly Regex SourceWordRegex =
         new(@"[\p{L}][\p{L}\p{N}'’]{1,30}", RegexOptions.Compiled);
 
+    // Uniquement les mots réellement génériques sont ignorés. Les mots métier déjà
+    // présents dans le nom (courrier, facture, contrat, relevé, etc.) sont une preuve
+    // utilisateur forte et doivent être conservés en priorité.
     private static readonly HashSet<string> SourceStopWords =
         new(
             new[]
             {
-                "scan", "document", "image", "invoice", "facture", "file", "fichier",
-                "nouveau", "new", "contrat", "devis", "rapport", "relevé", "releve",
-                "courrier", "email", "reçu", "recu", "archive", "copie", "page"
+                "scan", "document", "image", "img", "file", "fichier",
+                "nouveau", "new", "copie", "page"
             },
             StringComparer.OrdinalIgnoreCase);
+
+    private static readonly HashSet<DocumentType> StructuredDocumentTypes =
+        new(
+            new[]
+            {
+                DocumentType.Invoice,
+                DocumentType.Quote,
+                DocumentType.Contract,
+                DocumentType.Order,
+                DocumentType.Statement,
+                DocumentType.Receipt
+            });
 
     public FileRenameSuggestion Suggest(FileRenameContext context)
     {
@@ -55,15 +70,8 @@ public sealed class FileRenameSuggestionService
         var parts = new List<string>();
         var reasons = new List<string>();
 
-        var datePart = BuildDatePart(context);
-
-        if (!string.IsNullOrWhiteSpace(datePart))
-        {
-            parts.Add(datePart);
-            reasons.Add("date fiable intégrée");
-        }
-
         var sourceKeywords = ExtractSourceKeywords(originalBase);
+        var datePart = BuildReliableDatePart(context, originalBase);
         var hasExtractedMetadata =
             !string.IsNullOrWhiteSpace(datePart) ||
             context.DocumentType != DocumentType.Unknown ||
@@ -71,15 +79,23 @@ public sealed class FileRenameSuggestionService
             !string.IsNullOrWhiteSpace(context.Company) ||
             !string.IsNullOrWhiteSpace(context.Detail) ||
             !string.IsNullOrWhiteSpace(context.Reference);
+
+        // Le nom choisi par l'utilisateur est la première source de vérité.
         if (sourceKeywords.Count > 0 && hasExtractedMetadata)
         {
             parts.Add(string.Join(' ', sourceKeywords));
             reasons.Add("mots fiables du nom source prioritaires");
         }
 
+        if (!string.IsNullOrWhiteSpace(datePart))
+        {
+            parts.Add(datePart);
+            reasons.Add("date suffisamment fiable intégrée");
+        }
+
         var typePart = GetDocumentTypeLabel(context.DocumentType);
 
-        if (!string.IsNullOrWhiteSpace(typePart))
+        if (!string.IsNullOrWhiteSpace(typePart) && !ContainsEquivalentSourceWord(sourceKeywords, typePart))
         {
             parts.Add(typePart);
             reasons.Add("type documentaire intégré");
@@ -136,6 +152,9 @@ public sealed class FileRenameSuggestionService
         if (JunkNameRegex.IsMatch(originalBase.Trim()))
             reasons.Add("nom source peu informatif remplacé");
 
+        if (HasRejectedUncertainDate(context, originalBase))
+            reasons.Add("date détectée ignorée car insuffisamment fiable pour le renommage");
+
         reasons.AddRange(safe.Reasons);
 
         return new FileRenameSuggestion(
@@ -162,18 +181,68 @@ public sealed class FileRenameSuggestionService
             .ToArray();
     }
 
-    private static string? BuildDatePart(FileRenameContext context)
+    private static string? BuildReliableDatePart(FileRenameContext context, string originalBase)
     {
         if (context.ExactDate is not null)
-            return context.ExactDate.Value.ToString("yyyy-MM-dd");
+        {
+            var exact = context.ExactDate.Value;
+            if (StructuredDocumentTypes.Contains(context.DocumentType) || OriginalContainsDate(originalBase, exact))
+                return exact.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+
+            return null;
+        }
 
         if (context.Year is null)
+            return null;
+
+        // Un simple mois/année ou une année isolée trouvée dans le contenu peut être une
+        // date de naissance, d'ancien contrat ou de référence. On ne l'ajoute que si elle
+        // était déjà présente dans le nom source.
+        if (!OriginalContainsYear(originalBase, context.Year.Value))
             return null;
 
         if (context.Month is >= 1 and <= 12)
             return $"{context.Year:0000}-{context.Month:00}";
 
         return $"{context.Year:0000}";
+    }
+
+    private static bool HasRejectedUncertainDate(FileRenameContext context, string originalBase)
+    {
+        var hasCandidate = context.ExactDate is not null || context.Year is not null;
+        return hasCandidate && string.IsNullOrWhiteSpace(BuildReliableDatePart(context, originalBase));
+    }
+
+    private static bool OriginalContainsDate(string originalBase, DateTime value)
+    {
+        var candidates = new[]
+        {
+            value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            value.ToString("yyyyMMdd", CultureInfo.InvariantCulture),
+            value.ToString("dd-MM-yyyy", CultureInfo.InvariantCulture),
+            value.ToString("ddMMyyyy", CultureInfo.InvariantCulture),
+            value.ToString("dd.MM.yyyy", CultureInfo.InvariantCulture),
+            value.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture)
+        };
+
+        return candidates.Any(candidate => originalBase.Contains(candidate, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool OriginalContainsYear(string originalBase, int year) =>
+        Regex.IsMatch(originalBase, $@"(?<!\d){year:0000}(?!\d)", RegexOptions.CultureInvariant);
+
+    private static bool ContainsEquivalentSourceWord(IReadOnlyList<string> sourceKeywords, string typePart)
+    {
+        var normalizedType = RemoveDiacritics(typePart);
+        return sourceKeywords.Any(word =>
+            string.Equals(RemoveDiacritics(word), normalizedType, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string RemoveDiacritics(string value)
+    {
+        var normalized = value.Normalize(NormalizationForm.FormD);
+        var chars = normalized.Where(c => CharUnicodeInfo.GetUnicodeCategory(c) != UnicodeCategory.NonSpacingMark).ToArray();
+        return new string(chars).Normalize(NormalizationForm.FormC);
     }
 
     private static string? GetDocumentTypeLabel(DocumentType type) =>
