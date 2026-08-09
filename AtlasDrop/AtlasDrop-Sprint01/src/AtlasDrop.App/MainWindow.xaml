@@ -280,12 +280,12 @@
                 </StackPanel>
             </Border>
 
-            <UniformGrid x:Name="DecisionButtons" Columns="2" Margin="-3,0,-3,1">
+            <UniformGrid x:Name="DecisionButtons" Columns="2" Margin="-3,0,-3,0">
                 <Button x:Name="YesButton" Content="C’EST EXACT" IsEnabled="False"
                         Style="{StaticResource PrimaryDecisionButtonStyle}"
-                        FontSize="12" Padding="3,7" Margin="3" Click="OnYes"/>
-                <Button x:Name="CancelButton" Content="ANNULER" FontSize="12"
-                        Padding="3,7" Margin="3" Click="OnCancel"/>
+                        MinHeight="36" FontSize="12" Padding="3,7" Margin="3,2" Click="OnYes"/>
+                <Button x:Name="CancelButton" Content="ANNULER" MinHeight="36" FontSize="12"
+                        Padding="3,7" Margin="3,2" Click="OnCancel"/>
             </UniformGrid>
 
             <TextBlock x:Name="PathLengthStatusText" Foreground="#657089"
