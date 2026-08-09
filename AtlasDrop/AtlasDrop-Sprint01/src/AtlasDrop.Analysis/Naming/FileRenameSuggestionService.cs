@@ -64,7 +64,14 @@ public sealed class FileRenameSuggestionService
         }
 
         var sourceKeywords = ExtractSourceKeywords(originalBase);
-        if (sourceKeywords.Count > 0)
+        var hasExtractedMetadata =
+            !string.IsNullOrWhiteSpace(datePart) ||
+            context.DocumentType != DocumentType.Unknown ||
+            !string.IsNullOrWhiteSpace(context.Place) ||
+            !string.IsNullOrWhiteSpace(context.Company) ||
+            !string.IsNullOrWhiteSpace(context.Detail) ||
+            !string.IsNullOrWhiteSpace(context.Reference);
+        if (sourceKeywords.Count > 0 && hasExtractedMetadata)
         {
             parts.Add(string.Join(' ', sourceKeywords));
             reasons.Add("mots fiables du nom source prioritaires");
