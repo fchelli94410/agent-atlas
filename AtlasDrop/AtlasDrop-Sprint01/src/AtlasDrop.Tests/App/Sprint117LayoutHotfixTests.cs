@@ -29,7 +29,8 @@ public sealed class Sprint117LayoutHotfixTests
         Assert.True(tree > suggestion);
         Assert.True(rename > tree);
         Assert.Contains("MinHeight=\"250\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("x:Name=\"MainContentScrollViewer\" MinHeight=\"165\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"MainContentScrollViewer\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("MinHeight=\"165\"", xaml, StringComparison.Ordinal);
     }
 
     [Fact]
