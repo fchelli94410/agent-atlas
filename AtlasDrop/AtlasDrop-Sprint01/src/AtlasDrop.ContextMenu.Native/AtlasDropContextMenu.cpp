@@ -1,3 +1,4 @@
+#include "AtlasDropComExportCompatibility.h"
 #include <windows.h>
 #include <shlobj_core.h>
 #include <shobjidl_core.h>
