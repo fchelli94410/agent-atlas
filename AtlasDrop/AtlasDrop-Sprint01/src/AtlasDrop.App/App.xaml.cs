@@ -83,7 +83,9 @@ public partial class App : Application
                     mainWindow.WindowState = WindowState.Normal;
 
                 mainWindow.Show();
+                mainWindow.Topmost = true;
                 mainWindow.Activate();
+                mainWindow.Focus();
             });
         };
 
@@ -97,6 +99,7 @@ public partial class App : Application
             {
                 mainWindow.SignalMiddleClickResolutionFailed();
                 mainWindow.Show();
+                mainWindow.Topmost = true;
                 mainWindow.Activate();
             });
         };
@@ -120,18 +123,16 @@ public partial class App : Application
         {
             Dispatcher.Invoke(() =>
             {
+                // Une activation reçue après un classement confirmé doit toujours
+                // réutiliser immédiatement l'instance principale, sans Fin de tâche.
                 mainWindow.ActivateFile(filePath);
 
-                if (mainWindow.WindowState ==
-                    WindowState.Minimized)
-                {
-                    mainWindow.WindowState =
-                        WindowState.Normal;
-                }
+                if (mainWindow.WindowState == WindowState.Minimized)
+                    mainWindow.WindowState = WindowState.Normal;
 
-                mainWindow.Activate();
+                mainWindow.Show();
                 mainWindow.Topmost = true;
-                mainWindow.Topmost = false;
+                mainWindow.Activate();
                 mainWindow.Focus();
             });
         };
@@ -150,6 +151,7 @@ public partial class App : Application
         if (!string.IsNullOrWhiteSpace(requestedFile))
         {
             mainWindow.Show();
+            mainWindow.Topmost = true;
             mainWindow.ActivateFile(requestedFile);
         }
     }

@@ -421,7 +421,7 @@ public sealed class MainWindowExplorerRefinementTests
 
         Assert.Contains("workHeightDip * .94", positioning, StringComparison.Ordinal);
         Assert.Contains("Math.Max(680", positioning, StringComparison.Ordinal);
-        Assert.Contains("<Grid Margin=\"18,14,18,16\">", xaml, StringComparison.Ordinal);
+        Assert.Contains("<Grid Margin=\"18,14,18,8\">", xaml, StringComparison.Ordinal);
     }
 
     [Fact]
