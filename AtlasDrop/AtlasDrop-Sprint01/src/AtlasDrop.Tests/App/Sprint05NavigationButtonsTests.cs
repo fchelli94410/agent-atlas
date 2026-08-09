@@ -19,14 +19,16 @@ public sealed class Sprint05NavigationButtonsTests
     }
 
     [Fact]
-    public void Back_is_under_the_brand_and_manual_correction_returns_to_OneDrive()
+    public void Back_is_fixed_at_the_bottom_left_and_manual_correction_returns_to_OneDrive()
     {
         var xaml = File.ReadAllText(FindFile("MainWindow.xaml"));
-        var brand = xaml.IndexOf("Text=\"Atlas Drop\"", StringComparison.Ordinal);
+        var status = xaml.IndexOf("x:Name=\"StatusText\"", StringComparison.Ordinal);
         var back = xaml.IndexOf("x:Name=\"BackButton\"", StringComparison.Ordinal);
         var item = xaml.IndexOf("x:Name=\"ItemNameText\"", StringComparison.Ordinal);
 
-        Assert.True(brand >= 0 && back > brand && item > back);
+        Assert.True(item >= 0 && status > item && back > status);
+        Assert.Contains("x:Name=\"BackButton\" Content=\"←  RETOUR\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("HorizontalAlignment=\"Left\"", xaml[back..], StringComparison.Ordinal);
         Assert.Contains("x:Name=\"CorrectClassificationButton\" Content=\"RETOUR ONEDRIVE\"", xaml, StringComparison.Ordinal);
     }
 
