@@ -424,4 +424,27 @@ public sealed class MainWindowExplorerRefinementTests
         Assert.Contains("<Grid Margin=\"18,14,18,16\">", xaml, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void Analysis_runs_off_the_ui_thread_and_prefilters_large_indexes()
+    {
+        var code = ReadCode();
+
+        Assert.Contains("await Task.Run(() => AnalyzeItemAsync(path))", code, StringComparison.Ordinal);
+        Assert.Contains("await Task.Run(() => BuildSuggestions(_analysis))", code, StringComparison.Ordinal);
+        Assert.Contains("GetRelevantFolderCandidates(analysis)", code, StringComparison.Ordinal);
+        Assert.Contains("_folders.Count <= 250", code, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Selected_folder_is_focused_and_its_summary_stays_pinned()
+    {
+        var code = ReadCode();
+        var xaml = File.ReadAllText(FindFile("MainWindow.xaml"));
+
+        Assert.Contains("proposedNode.BringIntoView()", code, StringComparison.Ordinal);
+        Assert.Contains("Grid.Row=\"1\" Background=\"#ECFDF3\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("MainContentScrollViewer\" Grid.Row=\"2\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("VerticalScrollBarVisibility=\"Hidden\"", xaml, StringComparison.Ordinal);
+    }
+
 }
