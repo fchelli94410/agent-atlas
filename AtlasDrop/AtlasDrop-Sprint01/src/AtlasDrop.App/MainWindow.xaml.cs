@@ -680,10 +680,184 @@ public partial class MainWindow : Window
 
     private async void OnResetLearningClicked(object sender, RoutedEventArgs e)
     {
+        var confirmation = MessageBox.Show(
+            "Effacer tout l’apprentissage enregistré depuis le début ?\n\nAucun fichier OneDrive ne sera supprimé.",
+            "Tout effacer",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning,
+            MessageBoxResult.No);
+        if (confirmation != MessageBoxResult.Yes) return;
+
         await _learningService.ClearAsync();
         _learning.Clear();
         try { File.Delete(Path.Combine(_stateDirectory, "learning-v108.json")); } catch { }
-        LearningStatusText.Text = "Apprentissage effacé";
+        LearningStatusText.Text = "Tout l’apprentissage a été effacé.";
+    }
+
+    private void OnManageLearningClicked(object sender, RoutedEventArgs e)
+    {
+        var window = new Window
+        {
+            Title = "Gérer l’apprentissage Atlas Drop",
+            Owner = this,
+            Width = 620,
+            Height = 520,
+            MinWidth = 520,
+            MinHeight = 420,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Background = System.Windows.Media.Brushes.White
+        };
+
+        var root = new DockPanel { Margin = new Thickness(14) };
+        var title = new TextBlock
+        {
+            Text = "Coche les apprentissages à supprimer",
+            FontSize = 19,
+            FontWeight = FontWeights.Bold,
+            Margin = new Thickness(0, 0, 0, 8)
+        };
+        DockPanel.SetDock(title, Dock.Top);
+        root.Children.Add(title);
+
+        var help = new TextBlock
+        {
+            Text = "Les autres apprentissages seront conservés. Aucun fichier OneDrive ne sera touché.",
+            Foreground = System.Windows.Media.Brushes.DimGray,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 10)
+        };
+        DockPanel.SetDock(help, Dock.Top);
+        root.Children.Add(help);
+
+        var actions = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Margin = new Thickness(0, 10, 0, 0)
+        };
+        DockPanel.SetDock(actions, Dock.Bottom);
+
+        var deleteSelected = new Button
+        {
+            Content = "SUPPRIMER LA SÉLECTION",
+            Background = System.Windows.Media.Brushes.Firebrick,
+            Foreground = System.Windows.Media.Brushes.White
+        };
+        var close = new Button { Content = "FERMER" };
+        actions.Children.Add(deleteSelected);
+        actions.Children.Add(close);
+        root.Children.Add(actions);
+
+        var list = new StackPanel();
+        var groups = _learning
+            .GroupBy(entry => LearningFolderFromKey(entry.Key), StringComparer.OrdinalIgnoreCase)
+            .Where(group => !string.IsNullOrWhiteSpace(group.Key))
+            .OrderBy(group => group.Key, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        if (groups.Length == 0)
+        {
+            list.Children.Add(new TextBlock
+            {
+                Text = "Aucun apprentissage enregistré.",
+                Foreground = System.Windows.Media.Brushes.DimGray,
+                Margin = new Thickness(4)
+            });
+        }
+        else
+        {
+            foreach (var group in groups)
+            {
+                var tokens = group
+                    .Select(entry => LearningTokenFromKey(entry.Key))
+                    .Where(token => !string.IsNullOrWhiteSpace(token))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(token => token, StringComparer.OrdinalIgnoreCase)
+                    .Take(12);
+                list.Children.Add(new CheckBox
+                {
+                    Content = $"{ToOneDriveDisplayPath(group.Key)}\nMots : {string.Join(", ", tokens)}",
+                    Tag = group.Select(entry => entry.Key).ToArray(),
+                    Margin = new Thickness(3, 5, 3, 5),
+                    Padding = new Thickness(5),
+                    FontWeight = FontWeights.SemiBold
+                });
+            }
+        }
+
+        var scroll = new ScrollViewer
+        {
+            Content = list,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto
+        };
+        root.Children.Add(scroll);
+        window.Content = root;
+
+        deleteSelected.Click += (_, _) =>
+        {
+            var selectedKeys = list.Children
+                .OfType<CheckBox>()
+                .Where(checkBox => checkBox.IsChecked == true)
+                .SelectMany(checkBox => (string[])(checkBox.Tag ?? Array.Empty<string>()))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            if (selectedKeys.Length == 0)
+            {
+                MessageBox.Show("Coche au moins un apprentissage.", "Atlas Drop", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            foreach (var key in selectedKeys) _learning.Remove(key);
+            SaveLearningDictionary();
+            LearningStatusText.Text = $"{selectedKeys.Length} apprentissage(s) supprimé(s).";
+            window.Close();
+        };
+        close.Click += (_, _) => window.Close();
+        window.ShowDialog();
+    }
+
+    private void OnHistoryClicked(object sender, RoutedEventArgs e)
+    {
+        var history = LoadMoveHistory();
+        if (history.Count == 0)
+        {
+            MessageBox.Show("Aucun classement dans l’historique.", "Historique Atlas Drop", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var lines = history.Select(entry =>
+            $"{entry.TimestampUtc.ToLocalTime():dd/MM HH:mm}  •  {Path.GetFileName(entry.Target)}\n→ {ToOneDriveDisplayPath(entry.Destination)}");
+        MessageBox.Show(
+            string.Join("\n\n", lines),
+            "10 derniers classements",
+            MessageBoxButton.OK,
+            MessageBoxImage.Information);
+    }
+
+    private void SaveLearningDictionary()
+    {
+        try
+        {
+            File.WriteAllText(
+                Path.Combine(_stateDirectory, "learning-v108.json"),
+                JsonSerializer.Serialize(_learning));
+        }
+        catch
+        {
+            LearningStatusText.Text = "Impossible d’enregistrer la modification de l’apprentissage.";
+        }
+    }
+
+    private static string LearningFolderFromKey(string key)
+    {
+        var separator = key.IndexOf("=>", StringComparison.Ordinal);
+        return separator >= 0 ? key[(separator + 2)..] : string.Empty;
+    }
+
+    private static string LearningTokenFromKey(string key)
+    {
+        var separator = key.IndexOf("=>", StringComparison.Ordinal);
+        return separator > 0 ? key[..separator] : string.Empty;
     }
 
     private void OnReminderTick(object? sender, EventArgs e)
@@ -1069,10 +1243,34 @@ public partial class MainWindow : Window
     {
         try
         {
-            var audit = new { move.Source, move.Target, move.Destination, Status = status, TimestampUtc = DateTime.UtcNow };
+            var timestamp = DateTime.UtcNow;
+            var audit = new { move.Source, move.Target, move.Destination, Status = status, TimestampUtc = timestamp };
             File.WriteAllText(Path.Combine(_stateDirectory, "last-move-v108.json"), JsonSerializer.Serialize(audit));
+
+            var history = LoadMoveHistory();
+            history.Insert(0, new MoveHistoryEntry(move.Source, move.Target, move.Destination, status, timestamp));
+            File.WriteAllText(
+                Path.Combine(_stateDirectory, "move-history-v110.json"),
+                JsonSerializer.Serialize(history.Take(10).ToList()));
         }
         catch { }
+    }
+
+    private List<MoveHistoryEntry> LoadMoveHistory()
+    {
+        try
+        {
+            var path = Path.Combine(_stateDirectory, "move-history-v110.json");
+            if (!File.Exists(path)) return new List<MoveHistoryEntry>();
+            return JsonSerializer.Deserialize<List<MoveHistoryEntry>>(File.ReadAllText(path))
+                ?.OrderByDescending(entry => entry.TimestampUtc)
+                .Take(10)
+                .ToList() ?? new List<MoveHistoryEntry>();
+        }
+        catch
+        {
+            return new List<MoveHistoryEntry>();
+        }
     }
 
     private static string LearningKey(string token, string folder) => token.ToLowerInvariant() + "=>" + folder.ToLowerInvariant();
@@ -1507,6 +1705,7 @@ public partial class MainWindow : Window
         IReadOnlyList<DetectedDate> Dates,
         IReadOnlyList<int> Years);
     private sealed record PendingMove(string Source, string Target, string Destination, bool IsDirectory);
+    private sealed record MoveHistoryEntry(string Source, string Target, string Destination, string Status, DateTime TimestampUtc);
     private sealed record ExplorerWindowSnapshot(nint Hwnd, string? Path);
     private sealed record MonitorPlacement(NativeRect WorkArea, double ScaleX, double ScaleY);
     private enum DecisionPath { None, Exact, GoodBranch, WrongFolder }
