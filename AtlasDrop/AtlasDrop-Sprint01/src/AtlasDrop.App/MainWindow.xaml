@@ -289,7 +289,21 @@
             </UniformGrid>
 
             <TextBlock x:Name="PathLengthStatusText" Foreground="#657089"
-                       TextAlignment="Center" TextWrapping="Wrap"/>
+                       TextAlignment="Center" TextWrapping="Wrap">
+                <TextBlock.Style>
+                    <Style TargetType="TextBlock">
+                        <Setter Property="Visibility" Value="Visible"/>
+                        <Style.Triggers>
+                            <Trigger Property="Text" Value="Longueur de chemin sûre.">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                            </Trigger>
+                            <Trigger Property="Text" Value="">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                            </Trigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBlock.Style>
+            </TextBlock>
             <TextBlock x:Name="LearningStatusText" Foreground="#657089" TextAlignment="Center"/>
 
             <Border Margin="0">
@@ -299,6 +313,10 @@
                         <Style.Triggers>
                             <DataTrigger Binding="{Binding Child.Text, RelativeSource={RelativeSource Self}}"
                                          Value="Valide explicitement avant tout déplacement.">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding Child.Text, RelativeSource={RelativeSource Self}}"
+                                         Value="Retour à la proposition. Déplacement annulé.">
                                 <Setter Property="Visibility" Value="Collapsed"/>
                             </DataTrigger>
                             <DataTrigger Binding="{Binding Child.Text, RelativeSource={RelativeSource Self}}" Value="">
