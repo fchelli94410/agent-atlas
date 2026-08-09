@@ -476,4 +476,20 @@ public sealed class MainWindowExplorerRefinementTests
         Assert.Contains("Grid.Row=\"3\"", xaml, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void Voice_button_always_shows_immediate_feedback()
+    {
+        var code = ReadCode();
+        var voice = MethodBlock(
+            code,
+            "private async void OnExplainChoiceClicked",
+            "private void OnConfirmVoiceRuleClicked");
+
+        Assert.Contains("VoiceRulePanel.Visibility = Visibility.Visible", voice, StringComparison.Ordinal);
+        Assert.Contains("Activation du microphone…", voice, StringComparison.Ordinal);
+        Assert.Contains("await Dispatcher.Yield(DispatcherPriority.Render)", voice, StringComparison.Ordinal);
+        Assert.Contains("Aucun déplacement en attente", voice, StringComparison.Ordinal);
+        Assert.Contains("Microphone indisponible", voice, StringComparison.Ordinal);
+    }
+
 }
