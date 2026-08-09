@@ -1,7 +1,7 @@
 <Window x:Class="AtlasDrop.App.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Atlas Drop" Width="612" Height="720" MinWidth="520" MinHeight="300"
+        Title="Atlas Drop" Width="612" Height="820" MinWidth="520" MinHeight="650"
         WindowStartupLocation="Manual" Topmost="True" ResizeMode="CanResizeWithGrip"
         Background="#F5F7FA" ShowInTaskbar="True" PreviewKeyDown="OnWindowPreviewKeyDown"
         LayoutUpdated="OnFinishingWindowLayoutUpdated">
@@ -33,7 +33,7 @@
         </Style>
     </Window.Resources>
 
-    <Grid Margin="18,14,18,8">
+    <Grid Margin="18,12,18,5">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
@@ -55,13 +55,13 @@
 
         <Border x:Name="SelectedDestinationPanel" Grid.Row="1"
                 Background="#ECFDF3" BorderBrush="#4ADE80"
-                BorderThickness="1.5" CornerRadius="8" Padding="11" Margin="0,11,0,6">
+                BorderThickness="1.5" CornerRadius="8" Padding="9" Margin="0,8,0,4">
             <StackPanel>
                 <TextBlock Text="DOSSIER CHOISI" Foreground="#15803D"
-                           FontSize="10.5" FontWeight="Bold"/>
-                <TextBlock x:Name="ProposedPathText" Text="—" Margin="0,5,0,0"
-                           FontSize="13.5" FontWeight="Bold" TextWrapping="Wrap"/>
-                <StackPanel x:Name="SearchLoadingPanel" Orientation="Horizontal" Margin="0,6,0,0">
+                           FontSize="10" FontWeight="Bold"/>
+                <TextBlock x:Name="ProposedPathText" Text="—" Margin="0,3,0,0"
+                           FontSize="13" FontWeight="Bold" TextWrapping="Wrap"/>
+                <StackPanel x:Name="SearchLoadingPanel" Orientation="Horizontal" Margin="0,4,0,0">
                     <StackPanel.Style>
                         <Style TargetType="StackPanel">
                             <Setter Property="Visibility" Value="Collapsed"/>
@@ -89,13 +89,13 @@
 
         <Grid Grid.Row="2">
             <Grid.RowDefinitions>
-                <RowDefinition Height="*" MinHeight="315"/>
+                <RowDefinition Height="*" MinHeight="390"/>
                 <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
 
             <Border x:Name="SuggestionPanel" Grid.Row="0" Background="White" BorderBrush="#CBD5E1"
-                    BorderThickness="1.25" CornerRadius="9" Padding="9" Margin="0,2,0,6"
-                    MinHeight="315">
+                    BorderThickness="1.25" CornerRadius="9" Padding="7" Margin="0,1,0,4"
+                    MinHeight="390">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
@@ -104,26 +104,26 @@
                     </Grid.RowDefinitions>
                     <DockPanel Grid.Row="0" Margin="1,0,1,0">
                         <Border x:Name="ConfidenceBadge" DockPanel.Dock="Right" Background="#E8F0FF"
-                                Margin="5,0,0,0" CornerRadius="8" Padding="5,1">
+                                Margin="4,0,0,0" CornerRadius="7" Padding="4,1">
                             <TextBlock x:Name="ConfidenceLevelText" Text="EN ATTENTE"
-                                       Foreground="#1D4ED8" FontSize="9.5" FontWeight="Bold"/>
+                                       Foreground="#1D4ED8" FontSize="9" FontWeight="Bold"/>
                         </Border>
                         <TextBlock Text="Dossier proposé" Foreground="#657089" FontWeight="SemiBold"
-                                   FontSize="13" VerticalAlignment="Center"/>
+                                   FontSize="11.5" VerticalAlignment="Center"/>
                         <ListBox x:Name="SuggestionList" Visibility="Collapsed"
                                  SelectionChanged="OnSuggestionSelected" DisplayMemberPath="DisplayText"/>
                     </DockPanel>
 
                     <Border x:Name="ConfidenceInfoPanel" Grid.Row="1"
                             Background="#F8FAFC" BorderBrush="#D5DBE5" BorderThickness="0,0,0,1"
-                            Padding="7,4,7,5" Margin="-1,4,-1,0">
+                            Padding="5,2,5,3" Margin="-1,2,-1,0">
                         <TextBlock x:Name="ConfidenceText" Text="" Foreground="#536078"
-                                   FontSize="12.25" TextWrapping="Wrap"/>
+                                   FontSize="11.25" TextWrapping="Wrap"/>
                     </Border>
 
-                    <Border Grid.Row="2" Margin="0,6,0,0" BorderBrush="#D7DEE8" BorderThickness="1"
-                            CornerRadius="6" Background="#FFFFFF" Padding="4">
-                        <ScrollViewer x:Name="MainContentScrollViewer" Grid.Row="2" MinHeight="220"
+                    <Border Grid.Row="2" Margin="0,3,0,0" BorderBrush="#D7DEE8" BorderThickness="1"
+                            CornerRadius="6" Background="#FFFFFF" Padding="3">
+                        <ScrollViewer x:Name="MainContentScrollViewer" Grid.Row="2" MinHeight="300"
                                       VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Disabled">
                             <TreeView x:Name="FolderTree"
                                       Background="Transparent" BorderThickness="0"
@@ -138,17 +138,17 @@
                 </Grid>
             </Border>
 
-            <Border x:Name="RenamePanel" Grid.Row="1" Background="White" BorderBrush="#BFC9D8"
-                    BorderThickness="1.25" CornerRadius="9" Padding="9" Margin="0,0,0,6">
+            <Border x:Name="RenamePanel" Grid.Row="1" Background="White" BorderBrush="#64748B"
+                    BorderThickness="1.75" CornerRadius="9" Padding="8" Margin="0,0,0,4">
                 <StackPanel>
-                    <TextBlock Text="NOM PROPOSÉ" Foreground="#657089"
+                    <TextBlock Text="NOM PROPOSÉ" Foreground="#475569"
                                FontSize="10.5" FontWeight="Bold"/>
                     <TextBox x:Name="RenameTextBox" Margin="0,4,0,0" Padding="7,5" FontSize="12.5"/>
                     <CheckBox x:Name="AutoRenameCheckBox"
                               Content="Appliquer ce renommage lors du déplacement"
-                              FontWeight="SemiBold" FontSize="12" Margin="0,5,0,0"/>
+                              FontWeight="SemiBold" FontSize="12" Margin="0,4,0,0"/>
                     <TextBlock x:Name="AutoRenameStatusText" Foreground="#7A8498" FontSize="9.5"
-                               Margin="0,2,0,0" TextWrapping="Wrap"/>
+                               Margin="0,1,0,0" TextWrapping="Wrap"/>
                 </StackPanel>
             </Border>
 
@@ -261,24 +261,24 @@
             </Border>
         </Grid>
 
-        <StackPanel Grid.Row="3" Margin="0,4,0,0">
+        <StackPanel Grid.Row="3" Margin="0,1,0,0" VerticalAlignment="Bottom">
             <Button x:Name="MoveHereButton" Content="DÉPOSER DANS CE DOSSIER"
                     Background="#17803D" Foreground="White" HorizontalAlignment="Stretch"
                     Visibility="Collapsed" IsEnabled="False" MinHeight="38"
-                    Margin="3,0,3,7" Click="OnMoveHere"/>
+                    Margin="3,0,3,5" Click="OnMoveHere"/>
 
             <Border x:Name="MovePreviewPanel" Background="#EFF6FF" BorderBrush="#93C5FD"
-                    BorderThickness="1" CornerRadius="9" Padding="10" Margin="3,0,3,6">
+                    BorderThickness="1" CornerRadius="9" Padding="8" Margin="3,0,3,4">
                 <StackPanel>
                     <TextBlock Text="ÉLÉMENT À DÉPLACER" Foreground="#1D4ED8"
                                FontSize="10.5" FontWeight="Bold"/>
                     <TextBlock Text="{Binding Text, ElementName=ItemNameText}"
-                               Margin="0,4,0,0" TextWrapping="Wrap" FontWeight="SemiBold"/>
+                               Margin="0,3,0,0" TextWrapping="Wrap" FontWeight="SemiBold"/>
                     <TextBlock x:Name="CurrentMovePreviewText" Visibility="Collapsed"/>
                 </StackPanel>
             </Border>
 
-            <UniformGrid x:Name="DecisionButtons" Columns="2" Margin="-3,0,-3,3">
+            <UniformGrid x:Name="DecisionButtons" Columns="2" Margin="-3,0,-3,1">
                 <Button x:Name="YesButton" Content="C’EST EXACT" IsEnabled="False"
                         Style="{StaticResource PrimaryDecisionButtonStyle}"
                         FontSize="12" Padding="3,7" Margin="3" Click="OnYes"/>
@@ -289,36 +289,41 @@
             <TextBlock x:Name="PathLengthStatusText" Foreground="#657089"
                        TextAlignment="Center" TextWrapping="Wrap"/>
             <TextBlock x:Name="LearningStatusText" Foreground="#657089" TextAlignment="Center"/>
-            <TextBlock x:Name="StatusText" Text="Atlas Drop fonctionne en arrière-plan."
-                       TextAlignment="Center" Foreground="#657089" TextWrapping="Wrap">
-                <TextBlock.Style>
-                    <Style TargetType="TextBlock">
+
+            <Border Margin="0">
+                <Border.Style>
+                    <Style TargetType="Border">
                         <Setter Property="Visibility" Value="Visible"/>
-                        <Setter Property="Margin" Value="0,4,0,0"/>
                         <Style.Triggers>
-                            <Trigger Property="Text" Value="Valide explicitement avant tout déplacement.">
+                            <DataTrigger Binding="{Binding Child.Text, RelativeSource={RelativeSource Self}}"
+                                         Value="Valide explicitement avant tout déplacement.">
                                 <Setter Property="Visibility" Value="Collapsed"/>
-                                <Setter Property="Margin" Value="0"/>
-                            </Trigger>
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding Child.Text, RelativeSource={RelativeSource Self}}" Value="">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                            </DataTrigger>
                         </Style.Triggers>
                     </Style>
-                </TextBlock.Style>
-            </TextBlock>
+                </Border.Style>
+                <TextBlock x:Name="StatusText" Text="Atlas Drop fonctionne en arrière-plan."
+                           TextAlignment="Center" Foreground="#657089" TextWrapping="Wrap" Margin="0,2,0,0"/>
+            </Border>
+
             <Button x:Name="BackButton" Content="←  RETOUR"
                     Visibility="Collapsed" HorizontalAlignment="Left"
-                    MinHeight="28" Padding="8,4" Margin="0,5,0,0"
+                    MinHeight="28" Padding="8,4" Margin="0,3,0,0"
                     FontSize="11" Click="OnBack"/>
 
-            <StackPanel x:Name="LearningControlsPanel" Margin="0,3,0,0">
+            <StackPanel x:Name="LearningControlsPanel" Margin="0,1,0,0" VerticalAlignment="Bottom">
                 <CheckBox x:Name="LearningEnabledCheckBox" Content="Apprentissage activé"
-                          IsChecked="True" HorizontalAlignment="Left" FontSize="12"/>
-                <WrapPanel HorizontalAlignment="Right" Margin="0,1,0,0">
+                          IsChecked="True" HorizontalAlignment="Left" FontSize="12" Margin="0,0,0,1"/>
+                <WrapPanel HorizontalAlignment="Right" Margin="0">
                     <Button x:Name="HistoryButton" Content="HISTORIQUE" MinHeight="28"
-                            Padding="7,2" FontSize="11" Click="OnHistoryClicked"/>
+                            Padding="7,2" Margin="2,1,0,0" FontSize="11" Click="OnHistoryClicked"/>
                     <Button x:Name="ManageLearningButton" Content="GÉRER APPRENTISSAGE"
-                            MinHeight="28" Padding="7,2" FontSize="11" Click="OnManageLearningClicked"/>
+                            MinHeight="28" Padding="7,2" Margin="2,1,0,0" FontSize="11" Click="OnManageLearningClicked"/>
                     <Button x:Name="ResetLearningButton" Content="TOUT EFFACER"
-                            MinHeight="28" Padding="7,2" FontSize="11"/>
+                            MinHeight="28" Padding="7,2" Margin="2,1,0,0" FontSize="11"/>
                 </WrapPanel>
             </StackPanel>
         </StackPanel>
