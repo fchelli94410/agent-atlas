@@ -169,18 +169,18 @@
         <StackPanel Grid.Row="2" Margin="0,7,0,0">
             <TextBlock x:Name="PathLengthStatusText" Foreground="#657089"
                        TextAlignment="Center" TextWrapping="Wrap"/>
-            <DockPanel Margin="0,2,0,0">
-                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+            <StackPanel Margin="0,2,0,0">
+                <CheckBox x:Name="LearningEnabledCheckBox" Content="Apprentissage activé"
+                          IsChecked="True" HorizontalAlignment="Left"/>
+                <WrapPanel HorizontalAlignment="Right" Margin="0,3,0,0">
                     <Button x:Name="HistoryButton" Content="HISTORIQUE" MinHeight="30"
                             Padding="7,3" Click="OnHistoryClicked"/>
                     <Button x:Name="ManageLearningButton" Content="GÉRER APPRENTISSAGE"
                             MinHeight="30" Padding="7,3" Click="OnManageLearningClicked"/>
                     <Button x:Name="ResetLearningButton" Content="TOUT EFFACER"
                             MinHeight="30" Padding="7,3"/>
-                </StackPanel>
-                <CheckBox x:Name="LearningEnabledCheckBox" Content="Apprentissage activé"
-                          IsChecked="True" VerticalAlignment="Center"/>
-            </DockPanel>
+                </WrapPanel>
+            </StackPanel>
             <TextBlock x:Name="LearningStatusText" Foreground="#657089" TextAlignment="Center"/>
             <TextBlock x:Name="StatusText" Text="Atlas Drop fonctionne en arrière-plan."
                        TextAlignment="Center" Foreground="#657089" TextWrapping="Wrap"/>
