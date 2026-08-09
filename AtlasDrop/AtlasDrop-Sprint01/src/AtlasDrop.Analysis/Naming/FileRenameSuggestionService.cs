@@ -26,6 +26,19 @@ public sealed class FileRenameSuggestionService
             @"^(scan|document|document\d+|image|img|invoice|facture|file|fichier|new document|nouveau document)(\s*\(\d+\))?$",
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
+    private static readonly Regex SourceWordRegex =
+        new(@"[\p{L}][\p{L}\p{N}'’]{1,30}", RegexOptions.Compiled);
+
+    private static readonly HashSet<string> SourceStopWords =
+        new(
+            new[]
+            {
+                "scan", "document", "image", "invoice", "facture", "file", "fichier",
+                "nouveau", "new", "contrat", "devis", "rapport", "relevé", "releve",
+                "courrier", "email", "reçu", "recu", "archive", "copie", "page"
+            },
+            StringComparer.OrdinalIgnoreCase);
+
     public FileRenameSuggestion Suggest(FileRenameContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
@@ -48,6 +61,20 @@ public sealed class FileRenameSuggestionService
         {
             parts.Add(datePart);
             reasons.Add("date fiable intégrée");
+        }
+
+        var sourceKeywords = ExtractSourceKeywords(originalBase);
+        var hasExtractedMetadata =
+            !string.IsNullOrWhiteSpace(datePart) ||
+            context.DocumentType != DocumentType.Unknown ||
+            !string.IsNullOrWhiteSpace(context.Place) ||
+            !string.IsNullOrWhiteSpace(context.Company) ||
+            !string.IsNullOrWhiteSpace(context.Detail) ||
+            !string.IsNullOrWhiteSpace(context.Reference);
+        if (sourceKeywords.Count > 0 && hasExtractedMetadata)
+        {
+            parts.Add(string.Join(' ', sourceKeywords));
+            reasons.Add("mots fiables du nom source prioritaires");
         }
 
         var typePart = GetDocumentTypeLabel(context.DocumentType);
@@ -118,6 +145,21 @@ public sealed class FileRenameSuggestionService
                 context.OriginalFileName,
                 StringComparison.Ordinal),
             reasons.Distinct(StringComparer.OrdinalIgnoreCase).ToArray());
+    }
+
+    private static IReadOnlyList<string> ExtractSourceKeywords(string originalBase)
+    {
+        if (JunkNameRegex.IsMatch(originalBase.Trim()))
+            return Array.Empty<string>();
+
+        return SourceWordRegex.Matches(originalBase)
+            .Select(match => match.Value.Trim())
+            .Where(word => word.Length >= 3)
+            .Where(word => !SourceStopWords.Contains(word))
+            .Where(word => word.Any(char.IsLetter))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(3)
+            .ToArray();
     }
 
     private static string? BuildDatePart(FileRenameContext context)

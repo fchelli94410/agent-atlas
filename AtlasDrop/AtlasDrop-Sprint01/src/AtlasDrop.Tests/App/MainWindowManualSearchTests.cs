@@ -185,7 +185,7 @@ public sealed class MainWindowExplorerRefinementTests
             "private void PositionTopRight",
             "private static MonitorPlacement GetCursorMonitorPlacement");
 
-        Assert.Contains("? 110d : 12d", positioning, StringComparison.Ordinal);
+        Assert.Contains("? 150d : 12d", positioning, StringComparison.Ordinal);
         Assert.Contains("area.Right - rightGapPixels - widthPixels", positioning, StringComparison.Ordinal);
         Assert.Contains("MonitorFromPoint", code, StringComparison.Ordinal);
         Assert.Contains("info.WorkArea", code, StringComparison.Ordinal);
@@ -343,7 +343,7 @@ public sealed class MainWindowExplorerRefinementTests
 
         Assert.Contains("x:Name=\"RefreshSuggestionButton\"", xaml, StringComparison.Ordinal);
         Assert.Contains("_folders = await Task.Run(BuildIndex)", refresh, StringComparison.Ordinal);
-        Assert.Contains("_suggestions = BuildSuggestions(_analysis)", refresh, StringComparison.Ordinal);
+        Assert.Contains("_suggestions = await Task.Run(() => BuildSuggestions(_analysis))", refresh, StringComparison.Ordinal);
         Assert.DoesNotContain("MoveAsync", refresh, StringComparison.Ordinal);
     }
 
@@ -392,6 +392,105 @@ public sealed class MainWindowExplorerRefinementTests
         Assert.Contains("_pendingMove = null", back, StringComparison.Ordinal);
         Assert.DoesNotContain("ApplyConfirmedLearning", back, StringComparison.Ordinal);
         Assert.Contains("BackButton.Visibility = Visibility.Visible", code, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Explorer_is_forced_to_the_full_work_area_before_Atlas_returns_on_top()
+    {
+        var code = ReadCode();
+        var positioning = MethodBlock(
+            code,
+            "private static void PositionExplorerWindow",
+            "private static void ReleaseComObject");
+
+        Assert.Contains("ShowWindow(hwnd, ShowWindowRestore)", positioning, StringComparison.Ordinal);
+        Assert.Contains("area.Right - area.Left", positioning, StringComparison.Ordinal);
+        Assert.Contains("area.Bottom - area.Top", positioning, StringComparison.Ordinal);
+        Assert.Contains("ShowWindow(hwnd, ShowWindowMaximized)", positioning, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Normal_window_uses_most_of_the_monitor_height_for_breathable_spacing()
+    {
+        var code = ReadCode();
+        var xaml = File.ReadAllText(FindFile("MainWindow.xaml"));
+        var positioning = MethodBlock(
+            code,
+            "private void PositionTopRight",
+            "private static MonitorPlacement GetCursorMonitorPlacement");
+
+        Assert.Contains("workHeightDip * .94", positioning, StringComparison.Ordinal);
+        Assert.Contains("Math.Max(680", positioning, StringComparison.Ordinal);
+        Assert.Contains("<Grid Margin=\"18,14,18,16\">", xaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Analysis_runs_off_the_ui_thread_and_prefilters_large_indexes()
+    {
+        var code = ReadCode();
+
+        Assert.Contains("await Task.Run(() => AnalyzeItemAsync(path))", code, StringComparison.Ordinal);
+        Assert.Contains("await Task.Run(() => BuildSuggestions(_analysis))", code, StringComparison.Ordinal);
+        Assert.Contains("GetRelevantFolderCandidates(analysis)", code, StringComparison.Ordinal);
+        Assert.Contains("_folders.Count <= 250", code, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Selected_folder_is_focused_and_its_summary_stays_pinned()
+    {
+        var code = ReadCode();
+        var xaml = File.ReadAllText(FindFile("MainWindow.xaml"));
+
+        Assert.Contains("proposedNode.BringIntoView()", code, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"SelectedDestinationPanel\" Grid.Row=\"1\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Background=\"#ECFDF3\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("MainContentScrollViewer\" Grid.Row=\"2\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("VerticalScrollBarVisibility=\"Hidden\"", xaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Explorer_correction_mode_hides_irrelevant_controls_and_keeps_only_essential_actions()
+    {
+        var code = ReadCode();
+        var xaml = File.ReadAllText(FindFile("MainWindow.xaml"));
+        var refinement = MethodBlock(
+            code,
+            "private async Task EnterExplorerRefinementModeAsync",
+            "private async void OnMoveHere");
+
+        Assert.Contains("x:Name=\"SelectedDestinationPanel\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("SelectedDestinationPanel.Visibility = Visibility.Collapsed", refinement, StringComparison.Ordinal);
+        Assert.Contains("ExplainChoiceButton.Visibility = Visibility.Collapsed", refinement, StringComparison.Ordinal);
+        Assert.Contains("LearningControlsPanel.Visibility = Visibility.Collapsed", refinement, StringComparison.Ordinal);
+        Assert.Contains("Math.Min(maxHeightDip, 430)", code, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Deposit_button_is_pinned_outside_the_scrolling_content()
+    {
+        var xaml = File.ReadAllText(FindFile("MainWindow.xaml"));
+        var scrollEnd = xaml.IndexOf("</ScrollViewer>", StringComparison.Ordinal);
+        var deposit = xaml.IndexOf("x:Name=\"MoveHereButton\"", StringComparison.Ordinal);
+
+        Assert.True(scrollEnd >= 0);
+        Assert.True(deposit > scrollEnd);
+        Assert.Contains("Grid.Row=\"3\"", xaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Voice_button_always_shows_immediate_feedback()
+    {
+        var code = ReadCode();
+        var voice = MethodBlock(
+            code,
+            "private async void OnExplainChoiceClicked",
+            "private void OnConfirmVoiceRuleClicked");
+
+        Assert.Contains("VoiceRulePanel.Visibility = Visibility.Visible", voice, StringComparison.Ordinal);
+        Assert.Contains("Activation du microphone…", voice, StringComparison.Ordinal);
+        Assert.Contains("await Dispatcher.Yield(DispatcherPriority.Render)", voice, StringComparison.Ordinal);
+        Assert.Contains("Aucun déplacement en attente", voice, StringComparison.Ordinal);
+        Assert.Contains("Microphone indisponible", voice, StringComparison.Ordinal);
     }
 
 }

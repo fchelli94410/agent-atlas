@@ -199,7 +199,7 @@ public partial class MainWindow : Window
         await AnalyzeActiveFileAsync();
         await LoadAutomaticFolderCandidatesAsync();
         if (_analysis is null) return;
-        _suggestions = BuildSuggestions(_analysis);
+        _suggestions = await Task.Run(() => BuildSuggestions(_analysis));
         SuggestionList.ItemsSource = _suggestions;
         SuggestionList.SelectedIndex = _suggestions.Count > 0 ? 0 : -1;
         YesButton.IsEnabled = _suggestions.Count > 0;
@@ -226,8 +226,8 @@ public partial class MainWindow : Window
         {
             _folders = await Task.Run(BuildIndex);
             SaveIndex(_folders);
-            _analysis = await AnalyzeItemAsync(_activePath);
-            _suggestions = BuildSuggestions(_analysis);
+            _analysis = await Task.Run(() => AnalyzeItemAsync(_activePath));
+            _suggestions = await Task.Run(() => BuildSuggestions(_analysis));
             SuggestionList.ItemsSource = _suggestions;
             SuggestionList.SelectedIndex = _suggestions.Count > 0 ? 0 : -1;
             YesButton.IsEnabled = _suggestions.Count > 0;
@@ -256,7 +256,8 @@ public partial class MainWindow : Window
     private async Task AnalyzeActiveFileAsync()
     {
         if (_activePath is null) return;
-        _analysis = await AnalyzeItemAsync(_activePath);
+        var path = _activePath;
+        _analysis = await Task.Run(() => AnalyzeItemAsync(path));
     }
 
     private async Task LoadAutomaticFolderCandidatesAsync()
@@ -339,12 +340,13 @@ public partial class MainWindow : Window
             analysis.Years,
             string.Join('|', analysis.Tokens.Take(8)));
 
+        var candidateFolders = GetRelevantFolderCandidates(analysis);
         var tokenDocumentFrequency = analysis.Tokens.ToDictionary(
             token => token,
-            token => _folders.Count(folder => folder.Tokens.Contains(token)),
+            token => candidateFolders.Count(folder => folder.Tokens.Contains(token)),
             StringComparer.OrdinalIgnoreCase);
 
-        var ranked = _folders
+        var ranked = candidateFolders
             .Select(folder =>
             {
                 var relative = Path.GetRelativePath(_oneDriveRoot, folder.Path);
@@ -373,7 +375,7 @@ public partial class MainWindow : Window
                     analysis.Tokens,
                     folder.Tokens,
                     tokenDocumentFrequency,
-                    _folders.Count);
+                    candidateFolders.Count);
                 var hierarchyBoost = GetHierarchyBoost(relative, analysis.Tokens);
                 var score = Math.Clamp(
                     scored.Score + learned * 0.03 + thematicBoost + distinctiveBoost + hierarchyBoost,
@@ -410,6 +412,21 @@ public partial class MainWindow : Window
         {
             top with { Score = calibratedConfidence }
         };
+    }
+
+    private IReadOnlyList<FolderEntry> GetRelevantFolderCandidates(AnalysisSnapshot analysis)
+    {
+        if (_folders.Count <= 250)
+            return _folders;
+
+        var relevant = _folders
+            .Where(folder =>
+                folder.Depth == 1 ||
+                folder.Tokens.Overlaps(analysis.Tokens) ||
+                analysis.Years.Any(year => folder.Tokens.Contains(year.ToString())))
+            .ToList();
+
+        return relevant.Count >= 20 ? relevant : _folders;
     }
 
     private static double GetDistinctiveTokenBoost(
@@ -496,6 +513,7 @@ public partial class MainWindow : Window
         {
             [_oneDriveRoot] = rootItem
         };
+        TreeViewItem? proposedNode = null;
         foreach (var folder in folders.OrderBy(folder => folder.Depth).ThenBy(folder => folder.Path, StringComparer.OrdinalIgnoreCase))
         {
             var parentPath = Path.GetDirectoryName(folder.Path) ?? _oneDriveRoot;
@@ -505,6 +523,19 @@ public partial class MainWindow : Window
                 IsSameOrChild(proposedFolder, folder.Path);
             parent.Items.Add(node);
             nodes[folder.Path] = node;
+            if (PathsEqualSafe(folder.Path, proposedFolder)) proposedNode = node;
+        }
+
+        if (proposedNode is not null)
+        {
+            Dispatcher.BeginInvoke(
+                DispatcherPriority.Loaded,
+                () =>
+                {
+                    proposedNode.BringIntoView();
+                    MainContentScrollViewer.ScrollToVerticalOffset(
+                        Math.Max(0, MainContentScrollViewer.VerticalOffset - 60));
+                });
         }
     }
 
@@ -660,11 +691,15 @@ public partial class MainWindow : Window
         _lockedSourcePath = _activePath;
         _trackedExplorerHwnd = null;
         SuggestionPanel.Visibility = Visibility.Collapsed;
+        SelectedDestinationPanel.Visibility = Visibility.Collapsed;
         RenamePanel.Visibility = Visibility.Collapsed;
         MovePreviewPanel.Visibility = Visibility.Collapsed;
         ExplorerRefinementPanel.Visibility = Visibility.Visible;
         DecisionButtons.Visibility = Visibility.Collapsed;
         LearningControlsPanel.Visibility = Visibility.Collapsed;
+        ExplainChoiceButton.Visibility = Visibility.Collapsed;
+        PathLengthStatusText.Visibility = Visibility.Collapsed;
+        LearningStatusText.Visibility = Visibility.Collapsed;
         _compactExplorerMode = true;
         PositionTopRight();
         BackButton.Visibility = Visibility.Visible;
@@ -763,22 +798,43 @@ public partial class MainWindow : Window
 
     private async void OnExplainChoiceClicked(object sender, RoutedEventArgs e)
     {
-        if (_pendingMove is null || _voiceService is null) return;
-
         VoiceRulePanel.Visibility = Visibility.Visible;
+        VoiceTranscriptText.Text = string.Empty;
+        VoiceRulePreviewText.Text = string.Empty;
+
+        if (_pendingMove is null)
+        {
+            VoiceStatusText.Text = "Le classement doit d’abord être déplacé avant d’expliquer ton choix.";
+            StatusText.Text = "Aucun déplacement en attente : le microphone n’a pas démarré.";
+            return;
+        }
+
+        if (_voiceService is null)
+        {
+            VoiceStatusText.Text = "Module vocal indisponible. Relance Atlas Drop puis réessaie.";
+            return;
+        }
+
         if (!_voiceService.IsRecording)
         {
+            VoiceStatusText.Text = "Activation du microphone…";
+            ExplainChoiceButton.Content = "ACTIVATION…";
+            ExplainChoiceButton.IsEnabled = false;
+            await Dispatcher.Yield(DispatcherPriority.Render);
             try
             {
                 _voiceService.StartRecording();
                 ExplainChoiceButton.Content = "■ ARRÊTER ET ANALYSER";
                 VoiceStatusText.Text = "🎤 Je t’écoute. Explique simplement pourquoi ce fichier va dans ce dossier.";
-                VoiceTranscriptText.Text = string.Empty;
-                VoiceRulePreviewText.Text = string.Empty;
             }
             catch (Exception ex)
             {
+                ExplainChoiceButton.Content = "🎤 EXPLIQUER MON CHOIX";
                 VoiceStatusText.Text = "Microphone indisponible : vérifie l’autorisation Microphone de Windows. " + ex.Message;
+            }
+            finally
+            {
+                ExplainChoiceButton.IsEnabled = true;
             }
             return;
         }
@@ -937,10 +993,14 @@ public partial class MainWindow : Window
         ExplorerRefinementPanel.Visibility = Visibility.Collapsed;
         MoveHereButton.Visibility = Visibility.Collapsed;
         SuggestionPanel.Visibility = Visibility.Visible;
+        SelectedDestinationPanel.Visibility = Visibility.Visible;
         RenamePanel.Visibility = Directory.Exists(_activePath ?? string.Empty) ? Visibility.Collapsed : Visibility.Visible;
         MovePreviewPanel.Visibility = Visibility.Visible;
         DecisionButtons.Visibility = Visibility.Visible;
         LearningControlsPanel.Visibility = Visibility.Visible;
+        ExplainChoiceButton.Visibility = Visibility.Visible;
+        PathLengthStatusText.Visibility = Visibility.Visible;
+        LearningStatusText.Visibility = Visibility.Visible;
         _compactExplorerMode = false;
         PositionTopRight();
         BackButton.Visibility = Visibility.Collapsed;
@@ -1258,6 +1318,11 @@ public partial class MainWindow : Window
             DecisionButtons.Visibility = Visibility.Collapsed;
             MoveHereButton.Visibility = Visibility.Collapsed;
             RenamePanel.Visibility = Visibility.Collapsed;
+            SelectedDestinationPanel.Visibility = Visibility.Visible;
+            ProposedPathText.Text = ToOneDriveDisplayPath(destination);
+            ExplainChoiceButton.Visibility = Visibility.Visible;
+            PathLengthStatusText.Visibility = Visibility.Visible;
+            LearningStatusText.Visibility = Visibility.Visible;
             PostMovePanel.Visibility = Visibility.Visible;
             PostMovePanel.BringIntoView();
             MainContentScrollViewer.ScrollToEnd();
@@ -1843,13 +1908,15 @@ public partial class MainWindow : Window
     {
         var monitor = GetCursorMonitorPlacement();
         var area = monitor.WorkArea;
+        ShowWindow(hwnd, ShowWindowRestore);
         MoveWindow(
             hwnd,
-            area.Left + (int)((area.Right - area.Left) * .68),
-            area.Top + (int)(8 * monitor.ScaleY),
-            (int)((area.Right - area.Left) * .31),
-            (int)((area.Bottom - area.Top) * .55),
+            area.Left,
+            area.Top,
+            area.Right - area.Left,
+            area.Bottom - area.Top,
             true);
+        ShowWindow(hwnd, ShowWindowMaximized);
     }
 
     private static void ReleaseComObject(object? value)
@@ -1866,14 +1933,14 @@ public partial class MainWindow : Window
         var area = monitor.WorkArea;
         var workWidthDip = (area.Right - area.Left) / monitor.ScaleX;
         var workHeightDip = (area.Bottom - area.Top) / monitor.ScaleY;
-        var preferredRightGapDip = workWidthDip >= MinWidth + 134 ? 110d : 12d;
+        var preferredRightGapDip = workWidthDip >= MinWidth + 174 ? 150d : 12d;
         var maxWidthDip = Math.Max(MinWidth, workWidthDip - preferredRightGapDip - 24);
-        var maxHeightDip = Math.Max(MinHeight, workHeightDip - 16);
+        var maxHeightDip = Math.Max(MinHeight, workHeightDip - 28);
 
         Width = Math.Min(maxWidthDip, Math.Max(520, workWidthDip * .323));
         Height = _compactExplorerMode
-            ? Math.Min(maxHeightDip, 330)
-            : Math.Min(maxHeightDip, Math.Max(620, workHeightDip * .82));
+            ? Math.Min(maxHeightDip, 430)
+            : Math.Min(maxHeightDip, Math.Max(680, workHeightDip * .94));
 
         var widthPixels = (int)Math.Round(Width * monitor.ScaleX);
         var heightPixels = (int)Math.Round(Height * monitor.ScaleY);
@@ -1881,7 +1948,7 @@ public partial class MainWindow : Window
         var leftPixels = Math.Max(
             area.Left + (int)Math.Round(12 * monitor.ScaleX),
             area.Right - rightGapPixels - widthPixels);
-        var topPixels = area.Top + (int)Math.Round(8 * monitor.ScaleY);
+        var topPixels = area.Top + (int)Math.Round(16 * monitor.ScaleY);
 
         var hwnd = new WindowInteropHelper(this).Handle;
         if (hwnd != 0)
@@ -1999,8 +2066,11 @@ public partial class MainWindow : Window
         TrackedExplorerDestinationText.Text = "Ouverture de l’Explorateur…";
         RenameTextBox.Text = ""; AutoRenameStatusText.Text = ""; AutoRenameCheckBox.IsChecked = false;
         ExplorerRefinementPanel.Visibility = Visibility.Collapsed; PostMovePanel.Visibility = Visibility.Collapsed;
-        SuggestionPanel.Visibility = Visibility.Visible; MovePreviewPanel.Visibility = Visibility.Visible;
+        SuggestionPanel.Visibility = Visibility.Visible; SelectedDestinationPanel.Visibility = Visibility.Visible; MovePreviewPanel.Visibility = Visibility.Visible;
         LearningControlsPanel.Visibility = Visibility.Visible;
+        ExplainChoiceButton.Visibility = Visibility.Visible;
+        PathLengthStatusText.Visibility = Visibility.Visible;
+        LearningStatusText.Visibility = Visibility.Visible;
         BackButton.Visibility = Visibility.Collapsed;
         DecisionButtons.Visibility = Visibility.Visible; MoveHereButton.Visibility = Visibility.Collapsed; RenamePanel.Visibility = Visibility.Visible;
         MoveHereButton.IsEnabled = false; YesButton.IsEnabled = false; IsEnabled = true;
@@ -2029,6 +2099,7 @@ public partial class MainWindow : Window
     private const uint MonitorDefaultToNearest = 2;
     private const int MonitorDpiTypeEffective = 0;
     private const int ShowWindowMaximized = 3;
+    private const int ShowWindowRestore = 9;
 
     [StructLayout(LayoutKind.Sequential)]
     private struct NativePoint
