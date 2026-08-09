@@ -3,7 +3,8 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Atlas Drop" Width="612" Height="720" MinWidth="520" MinHeight="300"
         WindowStartupLocation="Manual" Topmost="True" ResizeMode="CanResizeWithGrip"
-        Background="#F5F7FA" ShowInTaskbar="True" PreviewKeyDown="OnWindowPreviewKeyDown">
+        Background="#F5F7FA" ShowInTaskbar="True" PreviewKeyDown="OnWindowPreviewKeyDown"
+        LayoutUpdated="OnFinishingWindowLayoutUpdated">
     <Window.Resources>
         <Style TargetType="Button">
             <Setter Property="FontFamily" Value="Segoe UI"/>
@@ -30,6 +31,10 @@
         <DockPanel Grid.Row="0">
             <StackPanel>
                 <TextBlock Text="Atlas Drop" FontSize="23" FontWeight="Bold"/>
+                <Button x:Name="BackButton" Content="←  RETOUR"
+                        Visibility="Collapsed" HorizontalAlignment="Left"
+                        MinHeight="28" Padding="8,4" Margin="0,9,0,5"
+                        FontSize="11" Click="OnBack"/>
                 <TextBlock x:Name="ItemNameText" Text="En attente d’un clic molette…"
                            FontSize="14" Margin="0,4,0,0" TextTrimming="CharacterEllipsis"/>
             </StackPanel>
@@ -119,13 +124,16 @@
                         <Button x:Name="ConfirmClassificationButton" Content="OUI, CONFIRMER"
                                 Background="#17803D" Foreground="White"
                                 Click="OnClassificationConfirmed"/>
-                        <Button x:Name="CorrectClassificationButton" Content="NON, CORRIGER"
-                                Background="#D97706" Foreground="White"
+                        <Button x:Name="CorrectClassificationButton" Content="RETOUR ONEDRIVE"
+                                Tag="NON, CORRIGER"
+                                Background="#2563EB" Foreground="White"
                                 Click="OnClassificationRejected"/>
                     </UniformGrid>
-                    <Button x:Name="UndoMoveButton" Content="ANNULER LE DÉPLACEMENT (10 s)"
-                            Background="#B91C1C" Foreground="White"
-                            Click="OnClassificationRejected"/>
+                    <Border Visibility="Collapsed" Height="0">
+                        <Button x:Name="UndoMoveButton" Content="ANNULER LE DÉPLACEMENT (10 s)"
+                                Background="#B91C1C" Foreground="White"
+                                Click="OnClassificationRejected"/>
+                    </Border>
                     <Button x:Name="ExplainChoiceButton"
                             Content="🎤 EXPLIQUER MON CHOIX"
                             Tag="EXPLICATION VOCALE — DISPONIBLE APRÈS CLASSEMENT"
@@ -205,10 +213,6 @@
                 </WrapPanel>
             </StackPanel>
             <TextBlock x:Name="LearningStatusText" Foreground="#657089" TextAlignment="Center"/>
-            <Button x:Name="BackButton" Content="←  RETOUR"
-                    Visibility="Collapsed" HorizontalAlignment="Left"
-                    MinHeight="28" Padding="7,3" Margin="0,8,0,4"
-                    FontSize="11" Click="OnBack"/>
             <TextBlock x:Name="StatusText" Text="Atlas Drop fonctionne en arrière-plan." Margin="0,8,0,0"
                        TextAlignment="Center" Foreground="#657089" TextWrapping="Wrap"/>
         </StackPanel>
