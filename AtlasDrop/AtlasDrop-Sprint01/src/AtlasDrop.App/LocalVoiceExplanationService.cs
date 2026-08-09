@@ -20,6 +20,8 @@ internal sealed class LocalVoiceExplanationService : IDisposable
 
     public bool IsRecording => _recorder is not null;
 
+    public event Action<float>? AudioLevelChanged;
+
     public void StartRecording()
     {
         if (IsRecording) return;
@@ -32,8 +34,28 @@ internal sealed class LocalVoiceExplanationService : IDisposable
             BufferMilliseconds = 100
         };
         _writer = new WaveFileWriter(_recordingPath, _recorder.WaveFormat);
-        _recorder.DataAvailable += (_, args) => _writer?.Write(args.Buffer, 0, args.BytesRecorded);
+        _recorder.DataAvailable += OnDataAvailable;
         _recorder.StartRecording();
+    }
+
+    private void OnDataAvailable(object? sender, WaveInEventArgs args)
+    {
+        _writer?.Write(args.Buffer, 0, args.BytesRecorded);
+        AudioLevelChanged?.Invoke(CalculatePeakLevel(args.Buffer, args.BytesRecorded));
+    }
+
+    private static float CalculatePeakLevel(byte[] buffer, int bytesRecorded)
+    {
+        var peak = 0;
+        var usableBytes = Math.Min(bytesRecorded, buffer.Length) & ~1;
+        for (var index = 0; index < usableBytes; index += 2)
+        {
+            var sample = (short)(buffer[index] | (buffer[index + 1] << 8));
+            var amplitude = Math.Abs((int)sample);
+            if (amplitude > peak) peak = amplitude;
+        }
+
+        return Math.Clamp(peak / 32768f, 0f, 1f);
     }
 
     public async Task<string> StopAndTranscribeAsync(IProgress<string>? progress = null)
@@ -51,6 +73,7 @@ internal sealed class LocalVoiceExplanationService : IDisposable
         _recorder = null;
         _writer?.Dispose();
         _writer = null;
+        AudioLevelChanged?.Invoke(0f);
 
         var modelPath = Path.Combine(_modelDirectory, "ggml-small.bin");
         if (!File.Exists(modelPath))
@@ -90,7 +113,10 @@ internal sealed class LocalVoiceExplanationService : IDisposable
     {
         try { _recorder?.StopRecording(); } catch { }
         _recorder?.Dispose();
+        _recorder = null;
         _writer?.Dispose();
+        _writer = null;
+        AudioLevelChanged?.Invoke(0f);
         if (!string.IsNullOrWhiteSpace(_recordingPath))
         {
             try { File.Delete(_recordingPath); } catch { }
