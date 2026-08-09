@@ -185,7 +185,7 @@ public sealed class MainWindowExplorerRefinementTests
             "private void PositionTopRight",
             "private static MonitorPlacement GetCursorMonitorPlacement");
 
-        Assert.Contains("? 110d : 12d", positioning, StringComparison.Ordinal);
+        Assert.Contains("? 150d : 12d", positioning, StringComparison.Ordinal);
         Assert.Contains("area.Right - rightGapPixels - widthPixels", positioning, StringComparison.Ordinal);
         Assert.Contains("MonitorFromPoint", code, StringComparison.Ordinal);
         Assert.Contains("info.WorkArea", code, StringComparison.Ordinal);
@@ -392,6 +392,21 @@ public sealed class MainWindowExplorerRefinementTests
         Assert.Contains("_pendingMove = null", back, StringComparison.Ordinal);
         Assert.DoesNotContain("ApplyConfirmedLearning", back, StringComparison.Ordinal);
         Assert.Contains("BackButton.Visibility = Visibility.Visible", code, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Explorer_is_forced_to_the_full_work_area_before_Atlas_returns_on_top()
+    {
+        var code = ReadCode();
+        var positioning = MethodBlock(
+            code,
+            "private static void PositionExplorerWindow",
+            "private static void ReleaseComObject");
+
+        Assert.Contains("ShowWindow(hwnd, ShowWindowRestore)", positioning, StringComparison.Ordinal);
+        Assert.Contains("area.Right - area.Left", positioning, StringComparison.Ordinal);
+        Assert.Contains("area.Bottom - area.Top", positioning, StringComparison.Ordinal);
+        Assert.Contains("ShowWindow(hwnd, ShowWindowMaximized)", positioning, StringComparison.Ordinal);
     }
 
 }
