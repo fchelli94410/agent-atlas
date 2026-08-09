@@ -96,7 +96,12 @@ jobs:
           $cer = Join-Path $publish 'AtlasDrop.ContextMenu.cer'
           Export-PfxCertificate -Cert $cert -FilePath $pfx -Password $password | Out-Null
           Export-Certificate -Cert $cert -FilePath $cer | Out-Null
+
+          # CI runner only: trust the ephemeral self-signed signer long enough to verify
+          # the package cryptographically. The installer itself never writes this cert
+          # to the Root store; it uses the narrower CurrentUser\TrustedPeople store.
           Import-Certificate -FilePath $cer -CertStoreLocation 'Cert:\CurrentUser\TrustedPeople' | Out-Null
+          Import-Certificate -FilePath $cer -CertStoreLocation 'Cert:\CurrentUser\Root' | Out-Null
 
           try {
             & $signTool.FullName sign /fd SHA256 /f $pfx /p $passwordText $msix
@@ -108,6 +113,7 @@ jobs:
             Remove-Item -LiteralPath $pfx -Force -ErrorAction SilentlyContinue
             Remove-Item -LiteralPath "Cert:\CurrentUser\My\$($cert.Thumbprint)" -Force -ErrorAction SilentlyContinue
             Remove-Item -LiteralPath "Cert:\CurrentUser\TrustedPeople\$($cert.Thumbprint)" -Force -ErrorAction SilentlyContinue
+            Remove-Item -LiteralPath "Cert:\CurrentUser\Root\$($cert.Thumbprint)" -Force -ErrorAction SilentlyContinue
           }
 
           if (-not (Test-Path -LiteralPath (Join-Path $publish 'AtlasDropContextMenu.dll'))) { throw 'Context-menu DLL missing from publish output.' }
