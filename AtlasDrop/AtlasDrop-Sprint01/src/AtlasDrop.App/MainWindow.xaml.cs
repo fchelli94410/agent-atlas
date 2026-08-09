@@ -464,7 +464,8 @@ public partial class MainWindow : Window
             var parentPath = Path.GetDirectoryName(folder.Path) ?? _oneDriveRoot;
             if (!nodes.TryGetValue(parentPath, out var parent)) parent = rootItem;
             var node = NewTreeItem(folder.Path);
-            node.IsExpanded = true;
+            node.IsExpanded = !string.IsNullOrWhiteSpace(proposedFolder) &&
+                IsSameOrChild(proposedFolder, folder.Path);
             parent.Items.Add(node);
             nodes[folder.Path] = node;
         }
