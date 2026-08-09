@@ -287,7 +287,12 @@ public partial class MainWindow : Window
             analysis.Years,
             string.Join('|', analysis.Tokens.Take(8)));
 
-        return _folders
+        var tokenDocumentFrequency = analysis.Tokens.ToDictionary(
+            token => token,
+            token => _folders.Count(folder => folder.Tokens.Contains(token)),
+            StringComparer.OrdinalIgnoreCase);
+
+        var ranked = _folders
             .Select(folder =>
             {
                 var relative = Path.GetRelativePath(_oneDriveRoot, folder.Path);
@@ -312,10 +317,23 @@ public partial class MainWindow : Window
                     .ToArray();
                 var learned = learnedValues.Length == 0 ? 0d : learnedValues.Average();
                 var thematicBoost = GetThematicBoost(analysis.Tokens, folder.Tokens);
-                var score = Math.Clamp(scored.Score + learned * 0.03 + thematicBoost, 0d, 1d);
+                var distinctiveBoost = GetDistinctiveTokenBoost(
+                    analysis.Tokens,
+                    folder.Tokens,
+                    tokenDocumentFrequency,
+                    _folders.Count);
+                var hierarchyBoost = GetHierarchyBoost(relative, analysis.Tokens);
+                var score = Math.Clamp(
+                    scored.Score + learned * 0.03 + thematicBoost + distinctiveBoost + hierarchyBoost,
+                    0d,
+                    1d);
                 var reason = thematicBoost > 0d
                     ? "correspondance thématique du dossier"
-                    : scored.Reasons.FirstOrDefault() ?? "correspondance du dossier";
+                    : distinctiveBoost > 0.04d
+                        ? "termes distinctifs du dossier"
+                        : hierarchyBoost > 0.04d
+                            ? "branche et sous-dossier cohérents"
+                            : scored.Reasons.FirstOrDefault() ?? "correspondance du dossier";
                 return new SuggestionOption(folder.Path, score, reason);
             })
             .Where(x => x.Score >= 0.30)
@@ -323,8 +341,73 @@ public partial class MainWindow : Window
             .Select(g => g.OrderByDescending(x => x.Score).First())
             .OrderByDescending(x => x.Score)
             .ThenBy(x => x.FullPath, StringComparer.OrdinalIgnoreCase)
-            .Take(1)
+            .Take(2)
             .ToList();
+
+        if (ranked.Count == 0) return ranked;
+
+        var top = ranked[0];
+        var runnerUpScore = ranked.Count > 1 ? ranked[1].Score : 0d;
+        var calibratedConfidence = GetCalibratedConfidence(
+            top.Score,
+            runnerUpScore,
+            analysis.Tokens.Count);
+        if (calibratedConfidence < 0.30d) return new List<SuggestionOption>();
+
+        return new List<SuggestionOption>
+        {
+            top with { Score = calibratedConfidence }
+        };
+    }
+
+    private static double GetDistinctiveTokenBoost(
+        IReadOnlySet<string> documentTokens,
+        IReadOnlySet<string> folderTokens,
+        IReadOnlyDictionary<string, int> tokenDocumentFrequency,
+        int folderCount)
+    {
+        if (folderCount <= 0) return 0d;
+
+        var boost = documentTokens
+            .Where(folderTokens.Contains)
+            .Sum(token =>
+            {
+                tokenDocumentFrequency.TryGetValue(token, out var frequency);
+                var inverseFrequency = Math.Log((folderCount + 1d) / (frequency + 1d));
+                return Math.Max(0d, inverseFrequency) * 0.025d;
+            });
+
+        return Math.Clamp(boost, 0d, 0.16d);
+    }
+
+    private static double GetHierarchyBoost(
+        string relativePath,
+        IReadOnlySet<string> documentTokens)
+    {
+        var parts = relativePath.Split(
+            new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar },
+            StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length == 0) return 0d;
+
+        var branchTokens = Tokenize(parts[0]);
+        var descendantTokens = Tokenize(string.Join(' ', parts.Skip(1)));
+        var branchMatches = branchTokens.Count(documentTokens.Contains);
+        var descendantMatches = descendantTokens.Count(documentTokens.Contains);
+
+        var branchBoost = Math.Min(0.06d, branchMatches * 0.03d);
+        var descendantBoost = Math.Min(0.08d, descendantMatches * 0.025d);
+        return branchBoost + descendantBoost;
+    }
+
+    private static double GetCalibratedConfidence(
+        double topScore,
+        double runnerUpScore,
+        int evidenceTokenCount)
+    {
+        var margin = Math.Max(0d, topScore - runnerUpScore);
+        var evidenceBonus = Math.Min(0.04d, evidenceTokenCount * 0.002d);
+        var ambiguityPenalty = Math.Max(0d, 0.08d - margin) * 0.35d;
+        return Math.Clamp(topScore + evidenceBonus - ambiguityPenalty, 0d, 1d);
     }
 
     private void OnSuggestionSelected(object sender, SelectionChangedEventArgs e)
@@ -784,6 +867,12 @@ public partial class MainWindow : Window
             [finalDestination] = StrongPositiveLearningWeight
         };
 
+        foreach (var ancestor in GetLearningAncestors(finalDestination))
+        {
+            if (!signals.ContainsKey(ancestor))
+                signals[ancestor] = WeakPositiveLearningWeight;
+        }
+
         if (_decisionPath == DecisionPath.GoodBranch &&
             !string.IsNullOrWhiteSpace(_initialSuggestedFolder) &&
             IsSameOrDescendant(_initialSuggestedFolder, finalDestination))
@@ -807,6 +896,18 @@ public partial class MainWindow : Window
 
         RecordLearningBatch(signals);
         _learningCommitted = true;
+    }
+
+    private IEnumerable<string> GetLearningAncestors(string destination)
+    {
+        if (!IsUnderRoot(destination)) yield break;
+
+        var current = Directory.GetParent(destination);
+        while (current is not null && IsUnderRoot(current.FullName) && !SamePath(current.FullName, _oneDriveRoot))
+        {
+            yield return current.FullName;
+            current = current.Parent;
+        }
     }
 
     private void RecordLearningBatch(IReadOnlyDictionary<string, int> signals)
