@@ -83,4 +83,18 @@ public sealed class AutomaticSuggestionQualityTests
             code,
             StringComparison.Ordinal);
     }
+    [Fact]
+    public void Ranking_uses_distinctive_hierarchical_and_calibrated_signals()
+    {
+        var code = File.ReadAllText(FindFile());
+
+        Assert.Contains("GetDistinctiveTokenBoost", code, StringComparison.Ordinal);
+        Assert.Contains("inverseFrequency", code, StringComparison.Ordinal);
+        Assert.Contains("GetHierarchyBoost", code, StringComparison.Ordinal);
+        Assert.Contains("GetCalibratedConfidence", code, StringComparison.Ordinal);
+        Assert.Contains("runnerUpScore", code, StringComparison.Ordinal);
+        Assert.Contains("ambiguityPenalty", code, StringComparison.Ordinal);
+        Assert.Contains(".Take(2)", code, StringComparison.Ordinal);
+    }
+
 }
