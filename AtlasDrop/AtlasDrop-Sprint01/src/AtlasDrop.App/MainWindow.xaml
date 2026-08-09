@@ -52,8 +52,8 @@
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="*"/>
                         <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
                     <DockPanel Grid.Row="0">
                         <Button x:Name="RefreshSuggestionButton" DockPanel.Dock="Right"
@@ -70,7 +70,9 @@
                         <ListBox x:Name="SuggestionList" Visibility="Collapsed"
                                  SelectionChanged="OnSuggestionSelected" DisplayMemberPath="DisplayText"/>
                     </DockPanel>
-                    <ScrollViewer x:Name="MainContentScrollViewer" Grid.Row="1" Margin="0,8,0,0"
+                    <TextBlock x:Name="ConfidenceText" Grid.Row="1" Text="" Foreground="#657089"
+                               Margin="0,8,0,0" TextWrapping="Wrap"/>
+                    <ScrollViewer x:Name="MainContentScrollViewer" Grid.Row="2" Margin="0,8,0,0"
                                   VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Disabled">
                         <TreeView x:Name="FolderTree"
                                   Background="Transparent" BorderThickness="0"
@@ -79,8 +81,6 @@
                                   VirtualizingStackPanel.IsVirtualizing="True"
                                   VirtualizingStackPanel.VirtualizationMode="Recycling"/>
                     </ScrollViewer>
-                    <TextBlock x:Name="ConfidenceText" Grid.Row="2" Text="" Foreground="#657089"
-                               Margin="0,8,0,0" TextWrapping="Wrap"/>
                 </Grid>
             </Border>
 
