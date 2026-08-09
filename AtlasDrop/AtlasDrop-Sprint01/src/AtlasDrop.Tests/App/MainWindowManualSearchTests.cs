@@ -244,4 +244,23 @@ public sealed class MainWindowExplorerRefinementTests
         Assert.Contains("health && healthFolder ? 0.25d : 0d", code, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void Confirmed_learning_generalizes_to_parent_folders_only_after_validation()
+    {
+        var code = ReadCode();
+        var apply = MethodBlock(
+            code,
+            "private void ApplyConfirmedLearning",
+            "private void RecordLearningBatch");
+        var rejected = MethodBlock(
+            code,
+            "private async void OnClassificationRejected",
+            "private static string RestoreMove");
+
+        Assert.Contains("GetLearningAncestors(finalDestination)", apply, StringComparison.Ordinal);
+        Assert.Contains("WeakPositiveLearningWeight", apply, StringComparison.Ordinal);
+        Assert.Contains("!SamePath(current.FullName, _oneDriveRoot)", apply, StringComparison.Ordinal);
+        Assert.DoesNotContain("RecordLearningBatch", rejected, StringComparison.Ordinal);
+    }
+
 }
