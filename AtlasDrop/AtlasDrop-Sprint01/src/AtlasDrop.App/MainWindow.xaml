@@ -48,6 +48,29 @@
                            FontSize="11" FontWeight="Bold"/>
                 <TextBlock x:Name="ProposedPathText" Text="—" Margin="0,6,0,0"
                            FontSize="14" FontWeight="Bold" TextWrapping="Wrap"/>
+                <StackPanel x:Name="SearchLoadingPanel" Orientation="Horizontal" Margin="0,8,0,0">
+                    <StackPanel.Style>
+                        <Style TargetType="StackPanel">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding Text, ElementName=StatusText}" Value="Analyse en cours…">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding Text, ElementName=StatusText}" Value="Clic détecté — analyse en cours…">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding Text, ElementName=StatusText}" Value="Actualisation des dossiers et nouvelle analyse…">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </StackPanel.Style>
+                    <ProgressBar x:Name="SearchLoadingProgress" Width="58" Height="4"
+                                 IsIndeterminate="True" VerticalAlignment="Center"/>
+                    <TextBlock Text="Recherche du meilleur emplacement…"
+                               Foreground="#657089" FontSize="11" Margin="9,0,0,0"
+                               VerticalAlignment="Center"/>
+                </StackPanel>
             </StackPanel>
         </Border>
 
@@ -109,6 +132,20 @@
                                        TextWrapping="Wrap" LineHeight="20"/>
                             <TextBlock x:Name="DestinationReadyText" Text="● Destination en attente"
                                        Foreground="#D97706" Margin="0,8,0,0" FontWeight="SemiBold"/>
+                            <ProgressBar x:Name="ExplorerLoadingProgress" Width="72" Height="4"
+                                         HorizontalAlignment="Left" IsIndeterminate="True" Margin="0,7,0,0">
+                                <ProgressBar.Style>
+                                    <Style TargetType="ProgressBar">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding Text, ElementName=DestinationReadyText}"
+                                                         Value="● Ouverture de l’Explorateur…">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </ProgressBar.Style>
+                            </ProgressBar>
                         </StackPanel>
                     </Border>
                 </StackPanel>
