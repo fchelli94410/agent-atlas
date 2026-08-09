@@ -54,7 +54,7 @@
         </DockPanel>
 
         <StackPanel Grid.Row="1">
-            <Border x:Name="SelectedDestinationPanel"
+            <Border x:Name="SelectedDestinationPanel" Grid.Row="1"
                     Background="#ECFDF3" BorderBrush="#4ADE80"
                     BorderThickness="1.5" CornerRadius="8" Padding="12" Margin="0,14,0,8">
                 <StackPanel>
