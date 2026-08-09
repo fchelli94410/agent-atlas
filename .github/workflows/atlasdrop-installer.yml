@@ -104,9 +104,6 @@ jobs:
             & $signTool.FullName sign /fd SHA256 /f $pfx /p $passwordText $msix
             if ($LASTEXITCODE -ne 0) { throw 'SignTool failed.' }
 
-            # GitHub's Windows PowerShell wrapper uses ErrorActionPreference=Stop.
-            # SignTool writes the expected self-signed trust warning to stderr, so
-            # temporarily allow native stderr and inspect its exact result ourselves.
             $previousErrorActionPreference = $ErrorActionPreference
             $ErrorActionPreference = 'Continue'
             try {
@@ -126,6 +123,7 @@ jobs:
                 throw 'Signed sparse package verification failed for a reason other than the expected self-signed trust chain.'
               }
               Write-Host 'Signature structure validated; self-signed root remains intentionally outside Trusted Root.'
+              $global:LASTEXITCODE = 0
             }
           }
           finally {
