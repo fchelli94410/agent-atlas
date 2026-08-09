@@ -10,8 +10,8 @@
   <ItemGroup>
     <PackageReference Include="NAudio" Version="2.2.1" />
     <PackageReference Include="Whisper.net" Version="1.9.1" />
-    <PackageReference Include="Whisper.net.Runtime" Version="1.9.1" />
-    <PackageReference Include="Whisper.net.Runtime.NoAvx" Version="1.9.1" />
+    <PackageReference Include="Whisper.net.Runtime" Version="1.9.1" GeneratePathProperty="true" />
+    <PackageReference Include="Whisper.net.Runtime.NoAvx" Version="1.9.1" GeneratePathProperty="true" />
   </ItemGroup>
 
   <ItemGroup>
@@ -27,4 +27,30 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>
+
+  <!--
+    Whisper.net charge les bibliothèques natives depuis ./runtimes dans le même
+    layout que ses packages NuGet. La publication single-file d'Atlas Drop 1.1.5
+    pouvait extraire les DLL ailleurs, ce qui provoquait "Native Library not found".
+    On recopie donc explicitement les deux runtimes CPU (standard + NoAvx) après
+    chaque publication, sans demander d'installation manuelle à l'utilisateur.
+  -->
+  <Target Name="PreserveWhisperNativeRuntimeLayout" AfterTargets="Publish">
+    <ItemGroup>
+      <AtlasWhisperCpuRuntime Include="$(PkgWhisper_net_Runtime)\runtimes\**\*" />
+      <AtlasWhisperNoAvxRuntime Include="$(PkgWhisper_net_Runtime_NoAvx)\runtimes\**\*" />
+    </ItemGroup>
+
+    <Error Condition="'@(AtlasWhisperCpuRuntime)' == ''"
+           Text="Whisper.net.Runtime native files were not found during publish." />
+    <Error Condition="'@(AtlasWhisperNoAvxRuntime)' == ''"
+           Text="Whisper.net.Runtime.NoAvx native files were not found during publish." />
+
+    <Copy SourceFiles="@(AtlasWhisperCpuRuntime)"
+          DestinationFiles="@(AtlasWhisperCpuRuntime->'$(PublishDir)runtimes\%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(AtlasWhisperNoAvxRuntime)"
+          DestinationFiles="@(AtlasWhisperNoAvxRuntime->'$(PublishDir)runtimes\%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+  </Target>
 </Project>
