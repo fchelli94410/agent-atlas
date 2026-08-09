@@ -19,28 +19,29 @@ public sealed class Sprint06ReturnOriginTests
     }
 
     [Fact]
-    public void Confirmation_captures_the_original_folder_before_the_move_is_finalized()
+    public void Confirmation_is_rewired_to_the_116_post_move_workflow()
     {
         var document = XDocument.Load(FindFile("MainWindow.xaml"));
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
         var button = Assert.Single(
             document.Descendants(),
             element => (string?)element.Attribute(x + "Name") == "ConfirmClassificationButton");
+        var finishing = File.ReadAllText(FindFile("MainWindow.Finishing.cs"));
 
         Assert.Equal("OnConfirmClassificationPreview", (string?)button.Attribute("PreviewMouseLeftButtonDown"));
-        Assert.Equal("OnClassificationConfirmed", (string?)button.Attribute("Click"));
+        Assert.Contains("ConfirmClassificationButton.Click -= OnClassificationConfirmed", finishing, StringComparison.Ordinal);
+        Assert.Contains("ConfirmClassificationButton.Click += OnFinishingClassificationConfirmedClicked", finishing, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void Successful_confirmation_returns_to_desktop_or_original_explorer_folder()
+    public void Return_onedrive_is_only_available_after_confirmation_and_targets_destination()
     {
         var code = File.ReadAllText(FindFile("MainWindow.Finishing.cs"));
 
-        Assert.Contains("Path.GetDirectoryName(_pendingMove.Source)", code, StringComparison.Ordinal);
-        Assert.Contains("Environment.SpecialFolder.DesktopDirectory", code, StringComparison.Ordinal);
-        Assert.Contains("ShowDesktop()", code, StringComparison.Ordinal);
-        Assert.Contains("OpenExplorerAndTrackAsync(sourceFolder)", code, StringComparison.Ordinal);
-        Assert.Contains("ShowWindow(hwnd, ShowWindowMaximized)", code, StringComparison.Ordinal);
-        Assert.Contains("Hide();", code, StringComparison.Ordinal);
+        Assert.Contains("CorrectClassificationButton.Visibility = _finishingClassificationConfirmed", code, StringComparison.Ordinal);
+        Assert.Contains("var move = _finishingConfirmedMove ?? _pendingMove", code, StringComparison.Ordinal);
+        Assert.Contains("BringExplorerImmediatelyBehindAtlasAsync(move.Destination)", code, StringComparison.Ordinal);
+        Assert.Contains("FinishingSetForegroundWindow(hwnd)", code, StringComparison.Ordinal);
+        Assert.Contains("Topmost = true", code, StringComparison.Ordinal);
     }
 }
