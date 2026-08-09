@@ -51,6 +51,19 @@ public partial class MainWindow
             new Action(() => VoiceLevelMeter.Value = Math.Clamp(level, 0f, 1f)));
     }
 
+    private void OnRedoVoiceRuleClicked(object sender, RoutedEventArgs e)
+    {
+        if (_pendingMove is null)
+            return;
+
+        _pendingVoiceExplanation = null;
+        VoiceTranscriptText.Text = string.Empty;
+        VoiceRulePreviewText.Text = string.Empty;
+        VoiceStatusText.Text = "Nouvelle explication : parle quand l'écoute démarre.";
+        VoiceRulePanel.Visibility = Visibility.Visible;
+        OnExplainChoiceClicked(sender, e);
+    }
+
     private void OnConfirmClassificationPreview(object sender, MouseButtonEventArgs e)
     {
         if (_pendingMove is null)
