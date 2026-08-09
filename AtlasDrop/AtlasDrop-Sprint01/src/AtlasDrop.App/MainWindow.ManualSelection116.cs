@@ -2,15 +2,15 @@ using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Media3D;
 
 namespace AtlasDrop.App;
 
 public partial class MainWindow
 {
-    // Handler de classe : aucune dépendance au XAML et aucun double abonnement lors
-    // des reconstructions de l'arborescence.
     private static readonly bool ManualTreeSelectionHandlerRegistered = RegisterManualTreeSelectionHandler();
 
     private static bool RegisterManualTreeSelectionHandler()
@@ -44,7 +44,7 @@ public partial class MainWindow
             return;
 
         string? destination = null;
-        for (var current = source; current is not null; current = VisualTreeHelper.GetParent(current))
+        for (var current = source; current is not null; current = GetUiParent(current))
         {
             if (current is TextBlock { Tag: string textPath })
             {
@@ -72,7 +72,7 @@ public partial class MainWindow
             return;
         }
 
-        e.Handled = true; // Empêche l'ancien handler qui déplaçait immédiatement le fichier.
+        e.Handled = true;
         _proposedFolder = destination;
         _decisionPath = PathsEqualSafe(GetBranchPath(destination), GetBranchPath(_initialSuggestedFolder ?? destination))
             ? DecisionPath.GoodBranch
@@ -94,12 +94,25 @@ public partial class MainWindow
 
     private static T? FindVisualAncestor<T>(DependencyObject start) where T : DependencyObject
     {
-        for (var current = start; current is not null; current = VisualTreeHelper.GetParent(current))
+        for (var current = start; current is not null; current = GetUiParent(current))
         {
             if (current is T match)
                 return match;
         }
 
         return null;
+    }
+
+    private static DependencyObject? GetUiParent(DependencyObject current)
+    {
+        return current switch
+        {
+            ContentElement content => ContentOperations.GetParent(content) ??
+                                      (content is FrameworkContentElement frameworkContent
+                                          ? frameworkContent.Parent
+                                          : null),
+            Visual or Visual3D => VisualTreeHelper.GetParent(current),
+            _ => LogicalTreeHelper.GetParent(current)
+        };
     }
 }
