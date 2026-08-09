@@ -31,9 +31,6 @@ public sealed class FileRenameSuggestionService
     private static readonly Regex SourceWordRegex =
         new(@"[\p{L}][\p{L}\p{N}'’]{1,30}", RegexOptions.Compiled);
 
-    // Les libellés documentaires génériques restent filtrés pour éviter les doublons,
-    // sauf « courrier » : le test réel a montré que ce mot du nom source est une information
-    // utile qui doit être conservée lorsque l'utilisateur l'a lui-même nommé ainsi.
     private static readonly HashSet<string> SourceStopWords =
         new(
             new[]
@@ -69,8 +66,38 @@ public sealed class FileRenameSuggestionService
         var originalBase = Path.GetFileNameWithoutExtension(
             context.OriginalFileName);
 
+        // Règle de sécurité Atlas Drop : si le nom source contient déjà une information
+        // humaine exploitable, l'OCR ne doit JAMAIS lui ajouter une date, un lieu, une
+        // société ou un type documentaire. On conserve le nom utilisateur, en corrigeant
+        // uniquement les espaces/caractères Windows invalides.
+        if (!JunkNameRegex.IsMatch(originalBase.Trim()))
+        {
+            var cleanedOriginal = CleanPart(originalBase);
+            var safeOriginal = _fileNamePolicy.Sanitize(cleanedOriginal + extension);
+            var reasons = new List<string>
+            {
+                "nom source informatif conservé : aucune donnée OCR ajoutée"
+            };
+
+            if (HasRejectedUncertainDate(context, originalBase))
+                reasons.Add("date détectée ignorée car absente du nom source");
+
+            reasons.AddRange(safeOriginal.Reasons);
+
+            return new FileRenameSuggestion(
+                safeOriginal.SafeFileName,
+                !string.Equals(
+                    safeOriginal.SafeFileName,
+                    context.OriginalFileName,
+                    StringComparison.Ordinal),
+                reasons.Distinct(StringComparer.OrdinalIgnoreCase).ToArray());
+        }
+
+        // Un nom réellement générique (scan, document1...) peut encore être amélioré
+        // à partir de métadonnées structurées. Cette branche ne s'applique jamais à un
+        // nom déjà significatif fourni par l'utilisateur.
         var parts = new List<string>();
-        var reasons = new List<string>();
+        var reasonsForJunk = new List<string>();
 
         var sourceKeywords = ExtractSourceKeywords(originalBase);
         var datePart = BuildReliableDatePart(context, originalBase);
@@ -82,18 +109,16 @@ public sealed class FileRenameSuggestionService
             !string.IsNullOrWhiteSpace(context.Detail) ||
             !string.IsNullOrWhiteSpace(context.Reference);
 
-        // Une date considérée fiable garde le format historique attendu, puis les mots
-        // réellement utiles du nom source arrivent avant les métadonnées OCR.
         if (!string.IsNullOrWhiteSpace(datePart))
         {
             parts.Add(datePart);
-            reasons.Add("date suffisamment fiable intégrée");
+            reasonsForJunk.Add("date suffisamment fiable intégrée");
         }
 
         if (sourceKeywords.Count > 0 && hasExtractedMetadata)
         {
             parts.Add(string.Join(' ', sourceKeywords));
-            reasons.Add("mots fiables du nom source prioritaires");
+            reasonsForJunk.Add("mots fiables du nom source prioritaires");
         }
 
         var typePart = GetDocumentTypeLabel(context.DocumentType);
@@ -101,13 +126,13 @@ public sealed class FileRenameSuggestionService
         if (!string.IsNullOrWhiteSpace(typePart) && !ContainsEquivalentSourceWord(sourceKeywords, typePart))
         {
             parts.Add(typePart);
-            reasons.Add("type documentaire intégré");
+            reasonsForJunk.Add("type documentaire intégré");
         }
 
         if (!string.IsNullOrWhiteSpace(context.Place))
         {
             parts.Add(CleanPart(context.Place));
-            reasons.Add("lieu intégré");
+            reasonsForJunk.Add("lieu intégré");
         }
 
         var detail = FirstUseful(
@@ -118,15 +143,13 @@ public sealed class FileRenameSuggestionService
         if (!string.IsNullOrWhiteSpace(detail))
         {
             parts.Add(CleanPart(detail));
-            reasons.Add("détail utile intégré");
+            reasonsForJunk.Add("détail utile intégré");
         }
 
         if (parts.Count == 0)
         {
             var cleanedOriginal = CleanPart(originalBase);
-
-            var safeOriginal = _fileNamePolicy.Sanitize(
-                cleanedOriginal + extension);
+            var safeOriginal = _fileNamePolicy.Sanitize(cleanedOriginal + extension);
 
             return new FileRenameSuggestion(
                 safeOriginal.SafeFileName,
@@ -152,13 +175,12 @@ public sealed class FileRenameSuggestionService
         var proposed = proposedBase + extension;
         var safe = _fileNamePolicy.Sanitize(proposed);
 
-        if (JunkNameRegex.IsMatch(originalBase.Trim()))
-            reasons.Add("nom source peu informatif remplacé");
+        reasonsForJunk.Add("nom source peu informatif remplacé");
 
         if (HasRejectedUncertainDate(context, originalBase))
-            reasons.Add("date détectée ignorée car insuffisamment fiable pour le renommage");
+            reasonsForJunk.Add("date détectée ignorée car insuffisamment fiable pour le renommage");
 
-        reasons.AddRange(safe.Reasons);
+        reasonsForJunk.AddRange(safe.Reasons);
 
         return new FileRenameSuggestion(
             safe.SafeFileName,
@@ -166,7 +188,7 @@ public sealed class FileRenameSuggestionService
                 safe.SafeFileName,
                 context.OriginalFileName,
                 StringComparison.Ordinal),
-            reasons.Distinct(StringComparer.OrdinalIgnoreCase).ToArray());
+            reasonsForJunk.Distinct(StringComparer.OrdinalIgnoreCase).ToArray());
     }
 
     private static IReadOnlyList<string> ExtractSourceKeywords(string originalBase)
@@ -198,8 +220,6 @@ public sealed class FileRenameSuggestionService
         if (context.Year is null)
             return null;
 
-        // Les documents structurés (facture, contrat, relevé...) gardent le comportement
-        // validé : année/mois détectés peuvent être utilisés sans inventer de jour.
         if (StructuredDocumentTypes.Contains(context.DocumentType))
         {
             if (context.Month is >= 1 and <= 12)
@@ -208,9 +228,6 @@ public sealed class FileRenameSuggestionService
             return $"{context.Year:0000}";
         }
 
-        // Pour un courrier ou un document libre, une date isolée du contenu peut être une
-        // date de naissance ou une référence : elle n'est conservée que si elle figurait
-        // déjà dans le nom source.
         if (!OriginalContainsYear(originalBase, context.Year.Value))
             return null;
 
@@ -223,7 +240,16 @@ public sealed class FileRenameSuggestionService
     private static bool HasRejectedUncertainDate(FileRenameContext context, string originalBase)
     {
         var hasCandidate = context.ExactDate is not null || context.Year is not null;
-        return hasCandidate && string.IsNullOrWhiteSpace(BuildReliableDatePart(context, originalBase));
+        if (!hasCandidate)
+            return false;
+
+        if (context.ExactDate is DateTime exact && OriginalContainsDate(originalBase, exact))
+            return false;
+
+        if (context.Year is int year && OriginalContainsYear(originalBase, year))
+            return false;
+
+        return true;
     }
 
     private static bool OriginalContainsDate(string originalBase, DateTime value)
