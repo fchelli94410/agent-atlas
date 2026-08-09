@@ -409,4 +409,19 @@ public sealed class MainWindowExplorerRefinementTests
         Assert.Contains("ShowWindow(hwnd, ShowWindowMaximized)", positioning, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void Normal_window_uses_most_of_the_monitor_height_for_breathable_spacing()
+    {
+        var code = ReadCode();
+        var xaml = File.ReadAllText(FindFile("MainWindow.xaml"));
+        var positioning = MethodBlock(
+            code,
+            "private void PositionTopRight",
+            "private static MonitorPlacement GetCursorMonitorPlacement");
+
+        Assert.Contains("workHeightDip * .94", positioning, StringComparison.Ordinal);
+        Assert.Contains("Math.Max(680", positioning, StringComparison.Ordinal);
+        Assert.Contains("<Grid Margin=\"18,14,18,16\">", xaml, StringComparison.Ordinal);
+    }
+
 }
