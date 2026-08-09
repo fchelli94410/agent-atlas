@@ -18,15 +18,13 @@ public sealed class Sprint116VoiceRuntimeTests
     }
 
     [Fact]
-    public void Cpu_and_noavx_runtimes_are_both_packaged_for_windows_fallback()
+    public void Cpu_and_noavx_runtimes_are_both_referenced_for_windows_fallback()
     {
         var project = File.ReadAllText(FindFile("AtlasDrop.App.csproj"));
 
-        Assert.Contains("Whisper.net.Runtime\" Version=\"1.9.1\" GeneratePathProperty=\"true\"", project, StringComparison.Ordinal);
-        Assert.Contains("Whisper.net.Runtime.NoAvx\" Version=\"1.9.1\" GeneratePathProperty=\"true\"", project, StringComparison.Ordinal);
-        Assert.Contains("PreserveWhisperNativeRuntimeLayout", project, StringComparison.Ordinal);
-        Assert.Contains("$(PublishDir)runtimes", project, StringComparison.Ordinal);
-        Assert.Contains("Whisper.net.Runtime native files were not found during publish", project, StringComparison.Ordinal);
+        Assert.Contains("Whisper.net.Runtime\" Version=\"1.9.1\"", project, StringComparison.Ordinal);
+        Assert.Contains("Whisper.net.Runtime.NoAvx\" Version=\"1.9.1\"", project, StringComparison.Ordinal);
+        Assert.DoesNotContain("PreserveWhisperNativeRuntimeLayout", project, StringComparison.Ordinal);
     }
 
     [Fact]
