@@ -132,9 +132,9 @@ public partial class MainWindow : Window
             e.Cancel = true;
             if (_pendingMove is not null)
             {
-                StatusText.Text = "Réponds à la question de conformité avant de fermer.";
-                Activate();
-                return;
+                _undoTimer.Stop();
+                SaveLastMove(_pendingMove, "CLOSED_WITHOUT_CONFIRMATION");
+                _pendingMove = null;
             }
             Hide();
             ResetOperation();
@@ -186,6 +186,7 @@ public partial class MainWindow : Window
         _learningCommitted = false;
         _moveInProgress = false;
         ItemNameText.Text = Path.GetFileName(fullPath);
+        AutoRenameCheckBox.IsChecked = false;
         var FileNameText = ItemNameText;
         FileNameText.Text = Path.GetFileName(fullPath);
         ExplorerRefinementPanel.Visibility = Visibility.Collapsed;
@@ -214,6 +215,43 @@ public partial class MainWindow : Window
 
         PrepareRename(fullPath, _analysis, _suggestions.FirstOrDefault());
         StatusText.Text = "Valide explicitement avant tout déplacement.";
+    }
+
+    private async void OnRefreshSuggestionClicked(object sender, RoutedEventArgs e)
+    {
+        if (_activePath is null || _pendingMove is not null || _moveInProgress) return;
+
+        RefreshSuggestionButton.IsEnabled = false;
+        StatusText.Text = "Actualisation des dossiers et nouvelle analyse…";
+        try
+        {
+            _folders = await Task.Run(BuildIndex);
+            SaveIndex(_folders);
+            _analysis = await AnalyzeItemAsync(_activePath);
+            _suggestions = BuildSuggestions(_analysis);
+            SuggestionList.ItemsSource = _suggestions;
+            SuggestionList.SelectedIndex = _suggestions.Count > 0 ? 0 : -1;
+            YesButton.IsEnabled = _suggestions.Count > 0;
+            BuildFolderDecisionTree(_suggestions.FirstOrDefault()?.FullPath);
+
+            if (_suggestions.Count == 0)
+            {
+                _proposedFolder = null;
+                ProposedPathText.Text = "Aucun dossier assez fiable";
+                ConfidenceText.Text = "Confiance inférieure à 30 % : clique sur OneDrive pour choisir manuellement.";
+            }
+
+            PrepareRename(_activePath, _analysis, _suggestions.FirstOrDefault());
+            StatusText.Text = "Recherche relancée — vérifie la nouvelle proposition.";
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = "Impossible de relancer la recherche : " + ex.Message;
+        }
+        finally
+        {
+            RefreshSuggestionButton.IsEnabled = true;
+        }
     }
 
     private async Task AnalyzeActiveFileAsync()
@@ -546,7 +584,7 @@ public partial class MainWindow : Window
             : DecisionPath.WrongFolder;
         _initialSuggestedFolder = _proposedFolder;
         await ExecuteMoveOnceAsync(destination);
-        _ = OpenDestinationBehindAsync(destination);
+        await OpenDestinationBehindAsync(destination);
     }
 
     private async Task OpenDestinationBehindAsync(string destination)
@@ -590,14 +628,12 @@ public partial class MainWindow : Window
             null,
             invoice.InvoiceNumber);
         var suggestion = _renameService.Suggest(context);
-        var confidence = new SuggestionConfidenceService().Evaluate(option?.Score ?? 0d);
-        var decision = _autoRenamePolicy.Decide(suggestion, confidence, userEnabledAutoRename: true);
         _preparingRename = true;
         RenameTextBox.Text = suggestion.ProposedFileName;
-        AutoRenameCheckBox.IsChecked = decision.ShouldApply;
+        AutoRenameCheckBox.IsChecked = false;
         _preparingRename = false;
         AutoRenameStatusText.Text = suggestion.Changed
-            ? $"Proposition modifiable — {decision.Reason}"
+            ? "Proposition modifiable — coche la case uniquement si tu souhaites renommer."
             : "Nom actuel conservé : aucune amélioration fiable.";
     }
 
@@ -708,8 +744,9 @@ public partial class MainWindow : Window
     {
         if (!_preparingRename && !string.IsNullOrWhiteSpace(RenameTextBox.Text))
         {
-            AutoRenameCheckBox.IsChecked = true;
-            AutoRenameStatusText.Text = "✓ Ton nom personnalisé sera appliqué lors du déplacement.";
+            AutoRenameStatusText.Text = AutoRenameCheckBox.IsChecked == true
+                ? "✓ Ton nom personnalisé sera appliqué lors du déplacement."
+                : "Proposition modifiée — coche la case pour appliquer ce renommage.";
         }
         _isUserTyping = true;
         _lastActivityUtc = DateTime.UtcNow;
@@ -1187,6 +1224,8 @@ public partial class MainWindow : Window
             MoveHereButton.Visibility = Visibility.Collapsed;
             RenamePanel.Visibility = Visibility.Collapsed;
             PostMovePanel.Visibility = Visibility.Visible;
+            PostMovePanel.BringIntoView();
+            MainContentScrollViewer.ScrollToEnd();
             ExplainChoiceButton.IsEnabled = true;
             ExplainChoiceButton.Content = "🎤 EXPLIQUER MON CHOIX";
             LearningControlsPanel.Visibility = Visibility.Visible;
