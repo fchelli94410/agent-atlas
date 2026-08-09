@@ -11,6 +11,9 @@ on:
       - '.github/workflows/atlasdrop-installer.yml'
   workflow_dispatch:
 
+env:
+  ATLASDROP_VERSION: '1.1.5'
+
 jobs:
   build-test-installer:
     runs-on: windows-latest
@@ -30,10 +33,90 @@ jobs:
         run: dotnet test AtlasDrop.sln -c Release --no-build --logger "trx;LogFileName=atlasdrop-tests.trx"
       - name: Publish autonomous Windows application
         run: dotnet publish src/AtlasDrop.App/AtlasDrop.App.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false -o installer/publish
+
+      - name: Build native Windows 11 context-menu extension
+        shell: powershell
+        run: |
+          $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+          if (-not (Test-Path -LiteralPath $vswhere)) { throw 'vswhere.exe not found.' }
+          $vsPath = (& $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath).Trim()
+          if ([string]::IsNullOrWhiteSpace($vsPath)) { throw 'Visual C++ build tools not found.' }
+          $vcvars = Join-Path $vsPath 'VC\Auxiliary\Build\vcvars64.bat'
+          $source = (Resolve-Path 'src\AtlasDrop.ContextMenu.Native\AtlasDropContextMenu.cpp').Path
+          $output = Join-Path (Resolve-Path 'installer\publish').Path 'AtlasDropContextMenu.dll'
+          $command = '"' + $vcvars + '" && cl.exe /nologo /std:c++17 /EHsc /LD /DUNICODE /D_UNICODE "' + $source + '" /link /OUT:"' + $output + '" && dumpbin.exe /exports "' + $output + '"'
+          $result = & cmd.exe /d /s /c $command 2>&1
+          $result | Write-Host
+          if ($LASTEXITCODE -ne 0) { throw "Native context-menu build failed: $LASTEXITCODE" }
+          $text = ($result | Out-String)
+          if ($text -notmatch 'DllGetClassObject' -or $text -notmatch 'DllCanUnloadNow') { throw 'Required COM exports are missing.' }
+
+      - name: Build and sign sparse identity package
+        shell: powershell
+        run: |
+          $publish = (Resolve-Path 'installer\publish').Path
+          $sparse = Join-Path $env:RUNNER_TEMP 'atlasdrop-sparse-package'
+          New-Item -ItemType Directory -Path $sparse -Force | Out-Null
+
+          $template = Get-Content 'installer\modern-context-menu\AppxManifest.xml.template' -Raw
+          $manifest = $template.Replace('__APP_VERSION__', $env:ATLASDROP_VERSION)
+          Set-Content -LiteralPath (Join-Path $sparse 'AppxManifest.xml') -Value $manifest -Encoding UTF8
+
+          Add-Type -AssemblyName System.Drawing
+          $bitmap = New-Object System.Drawing.Bitmap 150,150
+          $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+          try {
+            $graphics.Clear([System.Drawing.Color]::FromArgb(37,99,235))
+            $font = New-Object System.Drawing.Font('Segoe UI',72,[System.Drawing.FontStyle]::Bold,[System.Drawing.GraphicsUnit]::Pixel)
+            try {
+              $graphics.DrawString('A',$font,[System.Drawing.Brushes]::White,36,34)
+            }
+            finally { $font.Dispose() }
+            $bitmap.Save((Join-Path $publish 'AtlasDropLogo.png'), [System.Drawing.Imaging.ImageFormat]::Png)
+          }
+          finally {
+            $graphics.Dispose()
+            $bitmap.Dispose()
+          }
+
+          $makeAppx = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\makeappx.exe" -ErrorAction SilentlyContinue |
+            Sort-Object FullName -Descending | Select-Object -First 1
+          $signTool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" -ErrorAction SilentlyContinue |
+            Sort-Object FullName -Descending | Select-Object -First 1
+          if ($null -eq $makeAppx -or $null -eq $signTool) { throw 'Windows SDK packaging tools not found.' }
+
+          $msix = Join-Path $publish 'AtlasDrop.ContextMenu.msix'
+          & $makeAppx.FullName pack /o /d $sparse /nv /p $msix
+          if ($LASTEXITCODE -ne 0) { throw 'MakeAppx failed.' }
+
+          $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject 'CN=AtlasDrop' -CertStoreLocation 'Cert:\CurrentUser\My' -KeyExportPolicy Exportable -KeyLength 2048 -HashAlgorithm SHA256 -NotAfter (Get-Date).AddYears(2)
+          $passwordText = [Guid]::NewGuid().ToString('N')
+          $password = ConvertTo-SecureString $passwordText -AsPlainText -Force
+          $pfx = Join-Path $env:RUNNER_TEMP 'AtlasDrop.ContextMenu.pfx'
+          $cer = Join-Path $publish 'AtlasDrop.ContextMenu.cer'
+          Export-PfxCertificate -Cert $cert -FilePath $pfx -Password $password | Out-Null
+          Export-Certificate -Cert $cert -FilePath $cer | Out-Null
+
+          try {
+            & $signTool.FullName sign /fd SHA256 /f $pfx /p $passwordText $msix
+            if ($LASTEXITCODE -ne 0) { throw 'SignTool failed.' }
+            & $signTool.FullName verify /pa /v $msix
+            if ($LASTEXITCODE -ne 0) { throw 'Signed sparse package verification failed.' }
+          }
+          finally {
+            Remove-Item -LiteralPath $pfx -Force -ErrorAction SilentlyContinue
+            Remove-Item -LiteralPath "Cert:\CurrentUser\My\$($cert.Thumbprint)" -Force -ErrorAction SilentlyContinue
+          }
+
+          if (-not (Test-Path -LiteralPath (Join-Path $publish 'AtlasDropContextMenu.dll'))) { throw 'Context-menu DLL missing from publish output.' }
+          if (-not (Test-Path -LiteralPath $msix)) { throw 'Sparse identity package missing.' }
+          if (-not (Test-Path -LiteralPath $cer)) { throw 'Public signing certificate missing.' }
+
       - name: Install Inno Setup compiler
         run: choco install innosetup --no-progress -y
       - name: Build single EXE installer
-        run: '& "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=1.1.4" "installer\AtlasDrop.iss"'
+        shell: powershell
+        run: '& "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=$env:ATLASDROP_VERSION" "installer\AtlasDrop.iss"'
       - name: Verify public update channel
         shell: powershell
         run: |
@@ -66,9 +149,9 @@ jobs:
           if ($actualSize -ne $expectedSize) { throw "Wrong public installer size: actual=$actualSize expected=$expectedSize" }
           $fullHash = (Get-FileHash -LiteralPath $download -Algorithm SHA256).Hash.ToLowerInvariant()
           if ($fullHash -ne $manifest.sha256) { throw 'Corrupted public installer.' }
-      - name: Silent install, update restart and uninstall
+      - name: Silent install, modern menu registration, update restart and uninstall
         shell: powershell
-        timeout-minutes: 8
+        timeout-minutes: 10
         run: |
           function Invoke-SetupProcess {
             param(
@@ -78,9 +161,9 @@ jobs:
             )
             Write-Host "START: $Name"
             $process = Start-Process -FilePath $FilePath -ArgumentList $Arguments -PassThru
-            if (-not $process.WaitForExit(90000)) {
+            if (-not $process.WaitForExit(120000)) {
               try { $process.Kill() } catch {}
-              throw "$Name timed out after 90 seconds."
+              throw "$Name timed out after 120 seconds."
             }
             Write-Host "DONE: $Name, exit=$($process.ExitCode)"
             if ($process.ExitCode -ne 0) { throw "$Name failed: $($process.ExitCode)" }
@@ -89,22 +172,35 @@ jobs:
           $installer = Resolve-Path "installer\output\Installer-Atlas-Drop.exe"
           Invoke-SetupProcess -Name 'Initial installation' -FilePath $installer -Arguments @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART')
 
-          $app = Join-Path $env:LOCALAPPDATA 'AtlasDrop\AtlasDrop.App.exe'
+          $appDirectory = Join-Path $env:LOCALAPPDATA 'AtlasDrop'
+          $app = Join-Path $appDirectory 'AtlasDrop.App.exe'
           if (-not (Test-Path -LiteralPath $app)) { throw 'Installed executable missing.' }
+          if (-not (Test-Path -LiteralPath (Join-Path $appDirectory 'AtlasDropContextMenu.dll'))) { throw 'Installed modern-menu DLL missing.' }
 
-          Start-Process -FilePath $app -WorkingDirectory (Split-Path $app)
+          $identity = Get-AppxPackage -Name 'AtlasDrop.ContextMenu' -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($null -eq $identity) {
+            $log = Join-Path $appDirectory 'modern-context-menu.log'
+            if (Test-Path $log) { Get-Content $log | Write-Host }
+            throw 'Modern Windows context-menu identity was not registered.'
+          }
+          Write-Host "Modern context-menu identity: $($identity.PackageFullName)"
+
+          Start-Process -FilePath $app -WorkingDirectory $appDirectory
           Start-Sleep -Seconds 5
           if ($null -eq (Get-Process -Name 'AtlasDrop.App' -ErrorAction SilentlyContinue)) { throw 'Atlas Drop did not stay running.' }
           Stop-Process -Name 'AtlasDrop.App' -Force
 
           Invoke-SetupProcess -Name 'Silent update' -FilePath $installer -Arguments @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/CLOSEAPPLICATIONS','/UPDATE=1')
           Start-Sleep -Seconds 5
+          $identityAfterUpdate = Get-AppxPackage -Name 'AtlasDrop.ContextMenu' -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($null -eq $identityAfterUpdate) { throw 'Modern context-menu identity disappeared after update.' }
           if ($null -eq (Get-Process -Name 'AtlasDrop.App' -ErrorAction SilentlyContinue)) { throw 'Updated Atlas Drop did not restart.' }
           Stop-Process -Name 'AtlasDrop.App' -Force
 
-          $uninstaller = Join-Path $env:LOCALAPPDATA 'AtlasDrop\unins000.exe'
+          $uninstaller = Join-Path $appDirectory 'unins000.exe'
           Invoke-SetupProcess -Name 'Silent uninstall' -FilePath $uninstaller -Arguments @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART')
           if (Test-Path -LiteralPath $app) { throw 'Uninstall left the executable behind.' }
+          if ($null -ne (Get-AppxPackage -Name 'AtlasDrop.ContextMenu' -ErrorAction SilentlyContinue)) { throw 'Uninstall left the modern context-menu identity registered.' }
       - uses: actions/upload-artifact@v4
         with:
           name: Installer-Atlas-Drop-Windows
