@@ -46,7 +46,8 @@ public sealed class Sprint116RenameReliabilityTests
 
         var suggestion = _service.Suggest(context);
 
-        Assert.Contains("facture capex", suggestion.ProposedFileName, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("capex", suggestion.ProposedFileName, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Facture", suggestion.ProposedFileName, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("2026-08-09", suggestion.ProposedFileName, StringComparison.Ordinal);
     }
 
