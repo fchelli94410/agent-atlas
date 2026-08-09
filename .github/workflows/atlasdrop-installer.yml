@@ -36,24 +36,21 @@ jobs:
       - name: Test
         run: dotnet test AtlasDrop.sln -c Release --no-build --logger "trx;LogFileName=atlasdrop-tests.trx"
       - name: Publish autonomous Windows application
-        run: dotnet publish src/AtlasDrop.App/AtlasDrop.App.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false -o installer/publish
+        run: dotnet publish src/AtlasDrop.App/AtlasDrop.App.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -p:DebugType=None -p:DebugSymbols=false -o installer/publish
 
       - name: Verify Whisper native Windows runtime layout
         shell: powershell
         run: |
           $publish = (Resolve-Path 'installer\publish').Path
-          $runtimeRoot = Join-Path $publish 'runtimes'
-          if (-not (Test-Path -LiteralPath $runtimeRoot -PathType Container)) {
-            throw 'Whisper runtime directory missing from publish output.'
+          $nativeCandidates = @(Get-ChildItem -LiteralPath $publish -Recurse -File -Filter '*.dll' |
+            Where-Object { $_.Name -match '^(whisper|ggml.*)\.dll$' })
+          if ($nativeCandidates.Count -eq 0) {
+            Get-ChildItem -LiteralPath $publish -Recurse -File |
+              Where-Object { $_.FullName -match 'whisper|ggml|runtime' } |
+              Select-Object FullName,Length | Format-Table -AutoSize | Out-String | Write-Host
+            throw 'No native Whisper/ggml Windows DLL found in publish output.'
           }
-
-          $runtimeDlls = @(Get-ChildItem -LiteralPath $runtimeRoot -Recurse -File -Filter '*.dll' |
-            Where-Object { $_.FullName -match 'Whisper\.net\.Runtime' -and $_.FullName -match 'win-x64' })
-          if ($runtimeDlls.Count -eq 0) {
-            Get-ChildItem -LiteralPath $runtimeRoot -Recurse -File | Select-Object FullName | Format-Table -AutoSize | Out-String | Write-Host
-            throw 'No win-x64 Whisper native DLL found under publish/runtimes.'
-          }
-          $runtimeDlls | Select-Object FullName,Length | Format-Table -AutoSize | Out-String | Write-Host
+          $nativeCandidates | Select-Object FullName,Length | Format-Table -AutoSize | Out-String | Write-Host
 
       - name: Build native Windows 11 context-menu extension
         shell: powershell
@@ -229,9 +226,9 @@ jobs:
           if (-not (Test-Path -LiteralPath $app)) { throw 'Installed executable missing.' }
           if (-not (Test-Path -LiteralPath (Join-Path $appDirectory 'AtlasDropContextMenu.dll'))) { throw 'Installed modern-menu DLL missing.' }
 
-          $installedWhisperDlls = @(Get-ChildItem -LiteralPath (Join-Path $appDirectory 'runtimes') -Recurse -File -Filter '*.dll' -ErrorAction SilentlyContinue |
-            Where-Object { $_.FullName -match 'Whisper\.net\.Runtime' -and $_.FullName -match 'win-x64' })
-          if ($installedWhisperDlls.Count -eq 0) { throw 'Installed win-x64 Whisper native runtime missing.' }
+          $installedWhisperDlls = @(Get-ChildItem -LiteralPath $appDirectory -Recurse -File -Filter '*.dll' -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -match '^(whisper|ggml.*)\.dll$' })
+          if ($installedWhisperDlls.Count -eq 0) { throw 'Installed Whisper native Windows runtime missing.' }
           $installedWhisperDlls | Select-Object FullName,Length | Format-Table -AutoSize | Out-String | Write-Host
 
           $identity = Get-AppxPackage -Name 'AtlasDrop.ContextMenu' -ErrorAction SilentlyContinue | Select-Object -First 1
