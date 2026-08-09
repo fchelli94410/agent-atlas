@@ -1,6 +1,8 @@
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Threading;
 
 namespace AtlasDrop.App;
@@ -8,6 +10,7 @@ namespace AtlasDrop.App;
 public partial class MainWindow
 {
     private bool _finishingTreeRefreshInProgress;
+    private string? _returnSourceFolder;
 
     private void OnFinishingWindowLayoutUpdated(object? sender, EventArgs e)
     {
@@ -16,6 +19,64 @@ public partial class MainWindow
 
         if (UndoMoveButton.Visibility != Visibility.Collapsed)
             UndoMoveButton.Visibility = Visibility.Collapsed;
+    }
+
+    private void OnConfirmClassificationPreview(object sender, MouseButtonEventArgs e)
+    {
+        if (_pendingMove is null)
+            return;
+
+        _returnSourceFolder = Path.GetDirectoryName(_pendingMove.Source);
+        Dispatcher.BeginInvoke(
+            DispatcherPriority.ContextIdle,
+            new Action(() => _ = ReturnToOriginalLocationAsync()));
+    }
+
+    private async Task ReturnToOriginalLocationAsync()
+    {
+        var sourceFolder = _returnSourceFolder;
+        _returnSourceFolder = null;
+
+        if (string.IsNullOrWhiteSpace(sourceFolder) || !Directory.Exists(sourceFolder))
+            return;
+
+        Hide();
+
+        var desktop = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
+        if (!string.IsNullOrWhiteSpace(desktop) && SamePath(sourceFolder, desktop))
+        {
+            ShowDesktop();
+            return;
+        }
+
+        var explorer = await OpenExplorerAndTrackAsync(sourceFolder);
+        if (explorer is nint hwnd)
+            ShowWindow(hwnd, ShowWindowMaximized);
+    }
+
+    private static void ShowDesktop()
+    {
+        object? shell = null;
+        try
+        {
+            var shellType = Type.GetTypeFromProgID("Shell.Application");
+            if (shellType is null)
+                return;
+
+            shell = Activator.CreateInstance(shellType);
+            if (shell is not null)
+                ((dynamic)shell).ToggleDesktop();
+        }
+        catch
+        {
+        }
+        finally
+        {
+            if (shell is not null && Marshal.IsComObject(shell))
+            {
+                try { Marshal.FinalReleaseComObject(shell); } catch { }
+            }
+        }
     }
 
     private void OnFolderTreeLayoutUpdated(object? sender, EventArgs e)
