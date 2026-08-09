@@ -210,9 +210,9 @@
                                         </Style.Triggers>
                                     </Style>
                                 </UniformGrid.Style>
-                                <Button Content="ENREGISTRER LA RÈGLE" Background="#17803D"
+                                <Button Content="VALIDER" Background="#17803D"
                                         Foreground="White" Click="OnConfirmVoiceRuleClicked"/>
-                                <Button Content="IGNORER" Click="OnCancelVoiceRuleClicked"/>
+                                <Button Content="REFAIRE" Click="OnRedoVoiceRuleClicked"/>
                             </UniformGrid>
                         </StackPanel>
                     </Border>
