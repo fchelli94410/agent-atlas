@@ -343,7 +343,7 @@ public sealed class MainWindowExplorerRefinementTests
 
         Assert.Contains("x:Name=\"RefreshSuggestionButton\"", xaml, StringComparison.Ordinal);
         Assert.Contains("_folders = await Task.Run(BuildIndex)", refresh, StringComparison.Ordinal);
-        Assert.Contains("_suggestions = BuildSuggestions(_analysis)", refresh, StringComparison.Ordinal);
+        Assert.Contains("_suggestions = await Task.Run(() => BuildSuggestions(_analysis))", refresh, StringComparison.Ordinal);
         Assert.DoesNotContain("MoveAsync", refresh, StringComparison.Ordinal);
     }
 
@@ -442,7 +442,8 @@ public sealed class MainWindowExplorerRefinementTests
         var xaml = File.ReadAllText(FindFile("MainWindow.xaml"));
 
         Assert.Contains("proposedNode.BringIntoView()", code, StringComparison.Ordinal);
-        Assert.Contains("Grid.Row=\"1\" Background=\"#ECFDF3\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"SelectedDestinationPanel\" Grid.Row=\"1\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Background=\"#ECFDF3\"", xaml, StringComparison.Ordinal);
         Assert.Contains("MainContentScrollViewer\" Grid.Row=\"2\"", xaml, StringComparison.Ordinal);
         Assert.Contains("VerticalScrollBarVisibility=\"Hidden\"", xaml, StringComparison.Ordinal);
     }
