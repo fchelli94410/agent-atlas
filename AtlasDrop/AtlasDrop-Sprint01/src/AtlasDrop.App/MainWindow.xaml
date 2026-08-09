@@ -27,9 +27,6 @@
         </Grid.RowDefinitions>
 
         <DockPanel Grid.Row="0">
-            <Button x:Name="BackButton" Content="←  RETOUR" DockPanel.Dock="Left"
-                    Visibility="Collapsed" MinHeight="32" Padding="8,4" Margin="0,0,8,0"
-                    Click="OnBack"/>
             <StackPanel>
                 <TextBlock Text="Atlas Drop" FontSize="23" FontWeight="Bold"/>
                 <TextBlock x:Name="ItemNameText" Text="En attente d’un clic molette…"
@@ -194,6 +191,10 @@
                 </WrapPanel>
             </StackPanel>
             <TextBlock x:Name="LearningStatusText" Foreground="#657089" TextAlignment="Center"/>
+            <Button x:Name="BackButton" Content="←  RETOUR"
+                    Visibility="Collapsed" HorizontalAlignment="Left"
+                    MinHeight="28" Padding="7,3" Margin="0,3,0,2"
+                    FontSize="11" Click="OnBack"/>
             <TextBlock x:Name="StatusText" Text="Atlas Drop fonctionne en arrière-plan."
                        TextAlignment="Center" Foreground="#657089" TextWrapping="Wrap"/>
         </StackPanel>
