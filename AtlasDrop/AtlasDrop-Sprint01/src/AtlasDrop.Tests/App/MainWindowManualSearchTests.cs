@@ -447,4 +447,21 @@ public sealed class MainWindowExplorerRefinementTests
         Assert.Contains("VerticalScrollBarVisibility=\"Hidden\"", xaml, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void Explorer_correction_mode_hides_irrelevant_controls_and_keeps_only_essential_actions()
+    {
+        var code = ReadCode();
+        var xaml = File.ReadAllText(FindFile("MainWindow.xaml"));
+        var refinement = MethodBlock(
+            code,
+            "private async Task EnterExplorerRefinementModeAsync",
+            "private async void OnMoveHere");
+
+        Assert.Contains("x:Name=\"SelectedDestinationPanel\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("SelectedDestinationPanel.Visibility = Visibility.Collapsed", refinement, StringComparison.Ordinal);
+        Assert.Contains("ExplainChoiceButton.Visibility = Visibility.Collapsed", refinement, StringComparison.Ordinal);
+        Assert.Contains("LearningControlsPanel.Visibility = Visibility.Collapsed", refinement, StringComparison.Ordinal);
+        Assert.Contains("Math.Min(maxHeightDip, 430)", code, StringComparison.Ordinal);
+    }
+
 }
