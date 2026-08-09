@@ -1,5 +1,5 @@
 #ifndef AppVersion
-  #define AppVersion "1.1.5"
+  #define AppVersion "1.1.6"
 #endif
 #define AppName "Atlas Drop"
 #define AppExeName "AtlasDrop.App.exe"
@@ -29,19 +29,29 @@ SetupLogging=yes
 Source: "publish\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "Register-ModernContextMenu.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "Unregister-ModernContextMenu.ps1"; DestDir: "{app}"; Flags: ignoreversion
+; Whisper.net sous Windows nécessite le runtime Microsoft Visual C++ 2022 x64.
+; Le pipeline télécharge ce redistribuable uniquement depuis Microsoft et vérifie sa signature.
+Source: "redist\vc_redist.x64.exe"; DestDir: "{tmp}"; DestName: "AtlasDrop-vc_redist.x64.exe"; Flags: deleteafterinstall
 
 [Icons]
 Name: "{autodesktop}\Atlas Drop"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"
 Name: "{userstartup}\Atlas Drop"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"
 
 [Registry]
-; Compatibilité : ce verbe historique reste disponible dans « Afficher plus d'options » si le menu moderne est bloqué par une stratégie Windows.
+; Compatibilité uniquement : ces verbes historiques restent dans « Afficher plus d'options »
+; si une stratégie Windows bloque le package moderne IExplorerCommand.
 Root: HKA; Subkey: "Software\Classes\*\shell\AtlasDrop"; ValueType: string; ValueName: ""; ValueData: "Ranger avec Atlas Drop"; Flags: uninsdeletekey
 Root: HKA; Subkey: "Software\Classes\*\shell\AtlasDrop"; ValueType: string; ValueName: "Icon"; ValueData: """{app}\{#AppExeName}"""
 Root: HKA; Subkey: "Software\Classes\*\shell\AtlasDrop"; ValueType: string; ValueName: "Position"; ValueData: "Top"
 Root: HKA; Subkey: "Software\Classes\*\shell\AtlasDrop\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#AppExeName}"" ""%1"""
+Root: HKA; Subkey: "Software\Classes\Directory\shell\AtlasDrop"; ValueType: string; ValueName: ""; ValueData: "Ranger avec Atlas Drop"; Flags: uninsdeletekey
+Root: HKA; Subkey: "Software\Classes\Directory\shell\AtlasDrop"; ValueType: string; ValueName: "Icon"; ValueData: """{app}\{#AppExeName}"""
+Root: HKA; Subkey: "Software\Classes\Directory\shell\AtlasDrop"; ValueType: string; ValueName: "Position"; ValueData: "Top"
+Root: HKA; Subkey: "Software\Classes\Directory\shell\AtlasDrop\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#AppExeName}"" ""%1"""
 
 [Run]
+; Installation idempotente du prérequis natif Whisper Windows.
+Filename: "{tmp}\AtlasDrop-vc_redist.x64.exe"; Parameters: "/install /quiet /norestart"; Flags: runhidden waituntilterminated
 Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoLogo -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File ""{app}\Register-ModernContextMenu.ps1"" -PackagePath ""{app}\AtlasDrop.ContextMenu.msix"" -ExternalLocation ""{app}"" -CertificatePath ""{app}\AtlasDrop.ContextMenu.cer"""; Flags: runhidden waituntilterminated
 Filename: "{app}\{#AppExeName}"; Description: "Lancer Atlas Drop"; Flags: nowait postinstall skipifsilent
 Filename: "{app}\{#AppExeName}"; Flags: nowait; Check: IsUpdateMode
