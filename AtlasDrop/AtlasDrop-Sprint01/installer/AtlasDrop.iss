@@ -1,5 +1,5 @@
 #ifndef AppVersion
-  #define AppVersion "1.1.4"
+  #define AppVersion "1.1.5"
 #endif
 #define AppName "Atlas Drop"
 #define AppExeName "AtlasDrop.App.exe"
@@ -27,23 +27,28 @@ SetupLogging=yes
 
 [Files]
 Source: "publish\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "Register-ModernContextMenu.ps1"; DestDir: "{app}"; Flags: ignoreversion
+Source: "Unregister-ModernContextMenu.ps1"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{autodesktop}\Atlas Drop"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"
 Name: "{userstartup}\Atlas Drop"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"
 
 [Registry]
+; Compatibilité : ce verbe historique reste disponible dans « Afficher plus d'options » si le menu moderne est bloqué par une stratégie Windows.
 Root: HKA; Subkey: "Software\Classes\*\shell\AtlasDrop"; ValueType: string; ValueName: ""; ValueData: "Ranger avec Atlas Drop"; Flags: uninsdeletekey
 Root: HKA; Subkey: "Software\Classes\*\shell\AtlasDrop"; ValueType: string; ValueName: "Icon"; ValueData: """{app}\{#AppExeName}"""
 Root: HKA; Subkey: "Software\Classes\*\shell\AtlasDrop"; ValueType: string; ValueName: "Position"; ValueData: "Top"
 Root: HKA; Subkey: "Software\Classes\*\shell\AtlasDrop\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#AppExeName}"" ""%1"""
 
 [Run]
+Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoLogo -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File ""{app}\Register-ModernContextMenu.ps1"" -PackagePath ""{app}\AtlasDrop.ContextMenu.msix"" -ExternalLocation ""{app}"" -CertificatePath ""{app}\AtlasDrop.ContextMenu.cer"""; Flags: runhidden waituntilterminated
 Filename: "{app}\{#AppExeName}"; Description: "Lancer Atlas Drop"; Flags: nowait postinstall skipifsilent
 Filename: "{app}\{#AppExeName}"; Flags: nowait; Check: IsUpdateMode
 
 [UninstallRun]
 Filename: "{cmd}"; Parameters: "/C taskkill /IM {#AppExeName} /F >NUL 2>&1"; Flags: runhidden; RunOnceId: "StopAtlasDrop"
+Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoLogo -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File ""{app}\Unregister-ModernContextMenu.ps1"" -ExternalLocation ""{app}"""; Flags: runhidden waituntilterminated; RunOnceId: "UnregisterAtlasDropModernMenu"
 
 [Code]
 function IsUpdateMode: Boolean;
