@@ -40,18 +40,18 @@ public sealed class MainWindowAutoRenameTests
     }
 
     [Fact]
-    public void Auto_rename_policy_is_used_by_ui()
+    public void Rename_is_opt_in_every_time()
     {
         var code = File.ReadAllText(
             FindFile("MainWindow.xaml.cs"));
 
         Assert.Contains(
-            "HighConfidenceAutoRenamePolicy",
+            "AutoRenameCheckBox.IsChecked = false",
             code,
             StringComparison.Ordinal);
 
-        Assert.Contains(
-            "_autoRenamePolicy.Decide",
+        Assert.DoesNotContain(
+            "AutoRenameCheckBox.IsChecked = true",
             code,
             StringComparison.Ordinal);
     }
