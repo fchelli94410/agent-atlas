@@ -50,7 +50,7 @@ public sealed class MainWindowXamlTests
             document.Descendants(),
             element => (string?)element.Attribute(x + "Name") == "MoveHereButton");
 
-        Assert.Equal("DÉPOSER ICI", (string?)button.Attribute("Content"));
+        Assert.Equal("DÉPOSER DANS CE DOSSIER", (string?)button.Attribute("Content"));
         Assert.Equal("Collapsed", (string?)button.Attribute("Visibility"));
         Assert.Equal("False", (string?)button.Attribute("IsEnabled"));
         Assert.Equal("OnMoveHere", (string?)button.Attribute("Click"));
@@ -61,8 +61,8 @@ public sealed class MainWindowXamlTests
     {
         var text = File.ReadAllText(FindFile("MainWindow.xaml"));
 
-        Assert.Contains("Affiner dans l’Explorateur", text, StringComparison.Ordinal);
-        Assert.Contains("Navigue dans la fenêtre Explorateur ouverte par Atlas Drop", text, StringComparison.Ordinal);
+        Assert.Contains("Choisis le dossier dans l’Explorateur", text, StringComparison.Ordinal);
+        Assert.Contains("ouverte en plein écran derrière Atlas Drop", text, StringComparison.Ordinal);
         Assert.DoesNotContain("SearchResultsList", text, StringComparison.Ordinal);
         Assert.DoesNotContain("FolderTree", text, StringComparison.Ordinal);
     }
@@ -74,4 +74,18 @@ public sealed class MainWindowXamlTests
         Assert.Equal("Manual", (string?)root.Attribute("WindowStartupLocation"));
         Assert.Equal("True", (string?)root.Attribute("Topmost"));
     }
+    [Fact]
+    public void Compact_workflow_exposes_back_preview_history_and_learning_management()
+    {
+        var text = File.ReadAllText(FindFile("MainWindow.xaml"));
+
+        Assert.Contains("Width=\"612\"", text, StringComparison.Ordinal);
+        Assert.Contains("Height=\"586\"", text, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"BackButton\"", text, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"CurrentMovePreviewText\"", text, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"HistoryButton\"", text, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"ManageLearningButton\"", text, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"UndoMoveButton\"", text, StringComparison.Ordinal);
+    }
+
 }
