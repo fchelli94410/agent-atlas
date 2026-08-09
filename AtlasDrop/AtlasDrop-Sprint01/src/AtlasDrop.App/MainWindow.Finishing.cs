@@ -2,6 +2,7 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -52,18 +53,12 @@ public partial class MainWindow
         if (_finishingWorkflowHandlersAttached)
             return;
 
-        // Les handlers historiques déplaçaient ou restauraient le fichier trop tôt.
-        // La 1.1.6 impose d'abord une confirmation, puis seulement les actions annexes.
         ConfirmClassificationButton.Click -= OnClassificationConfirmed;
         ConfirmClassificationButton.Click += OnFinishingClassificationConfirmedClicked;
         CorrectClassificationButton.Click -= OnClassificationRejected;
         CorrectClassificationButton.Click += OnFinishingReturnOneDriveClicked;
-
-        // La fenêtre de gestion 1.1.6 remplace la fenêtre historique pour offrir les
-        // trois actions demandées, correctement alignées et avec confirmation globale.
         ManageLearningButton.Click -= OnManageLearningClicked;
         ManageLearningButton.Click += OnFinishingManageLearningClicked;
-
         _finishingWorkflowHandlersAttached = true;
     }
 
@@ -103,7 +98,6 @@ public partial class MainWindow
             : Visibility.Collapsed;
         ExplainChoiceButton.IsEnabled = _finishingClassificationConfirmed;
 
-        // Une fois le classement confirmé, RETOUR ne doit surtout plus annuler le déplacement.
         if (_finishingClassificationConfirmed)
             BackButton.Visibility = Visibility.Collapsed;
     }
@@ -156,10 +150,6 @@ public partial class MainWindow
         SaveLastMove(move, "CONFIRMED");
         _finishingConfirmedMove = move;
         _finishingClassificationConfirmed = true;
-
-        // Le classement est terminé : une nouvelle activation peut arriver immédiatement.
-        // On garde néanmoins le mouvement courant en mémoire tant que l'utilisateur souhaite
-        // expliquer son choix ou revenir voir le dossier dans OneDrive.
         _busy = false;
 
         StatusText.Text = "Classement confirmé. Tu peux revenir à OneDrive ou expliquer ton choix.";
@@ -192,7 +182,6 @@ public partial class MainWindow
         ShowWindow(hwnd, ShowWindowMaximized);
         FinishingSetForegroundWindow(hwnd);
         await Task.Delay(120);
-
         Show();
         Topmost = true;
         Activate();
@@ -219,7 +208,6 @@ public partial class MainWindow
         };
 
         var root = new DockPanel { Margin = new Thickness(18) };
-
         var title = new TextBlock
         {
             Text = "Gérer l’apprentissage",
@@ -435,8 +423,6 @@ public partial class MainWindow
         OnExplainChoiceClicked(sender, e);
     }
 
-    // Conservé pour compatibilité avec le XAML 1.1.5. La vraie confirmation
-    // est désormais traitée par OnFinishingClassificationConfirmedClicked.
     private void OnConfirmClassificationPreview(object sender, MouseButtonEventArgs e)
     {
         _closeTimer.Stop();
