@@ -24,9 +24,8 @@ public sealed class MainWindowXamlTests
 
     [Theory]
     [InlineData("YesButton")]
-    [InlineData("NoButton")]
-    [InlineData("ChooseButton")]
     [InlineData("CancelButton")]
+    [InlineData("FolderTree")]
     [InlineData("MoveHereButton")]
     [InlineData("ProposedPathText")]
     [InlineData("ExplorerRefinementPanel")]
@@ -64,7 +63,7 @@ public sealed class MainWindowXamlTests
         Assert.Contains("Choisis le dossier dans l’Explorateur", text, StringComparison.Ordinal);
         Assert.Contains("ouverte en plein écran derrière Atlas Drop", text, StringComparison.Ordinal);
         Assert.DoesNotContain("SearchResultsList", text, StringComparison.Ordinal);
-        Assert.DoesNotContain("FolderTree", text, StringComparison.Ordinal);
+        Assert.Contains("FolderTree", text, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -80,7 +79,7 @@ public sealed class MainWindowXamlTests
         var text = File.ReadAllText(FindFile("MainWindow.xaml"));
 
         Assert.Contains("Width=\"612\"", text, StringComparison.Ordinal);
-        Assert.Contains("Height=\"586\"", text, StringComparison.Ordinal);
+        Assert.Contains("Height=\"720\"", text, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"BackButton\"", text, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"CurrentMovePreviewText\"", text, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"HistoryButton\"", text, StringComparison.Ordinal);
