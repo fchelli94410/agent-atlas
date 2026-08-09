@@ -66,6 +66,10 @@ public partial class MainWindow : Window
     private readonly LocalLearningService _learningService = new(new InMemoryLearningRepository());
     private readonly InactivityReminderPolicy _reminderPolicy = new(TimeSpan.FromMinutes(2));
     private readonly DispatcherTimer _reminderTimer = new() { Interval = TimeSpan.FromSeconds(10) };
+    private readonly DispatcherTimer _explorerPathTimer = new() { Interval = TimeSpan.FromMilliseconds(350) };
+    private readonly DispatcherTimer _undoTimer = new() { Interval = TimeSpan.FromSeconds(1) };
+    private int _undoSecondsRemaining;
+    private bool _preparingRename;
     private readonly FolderScoringService _folderScoring = new(new TextNormalizer(), MaxDepth);
     private readonly string _oneDriveRoot;
     private readonly string _stateDirectory;
@@ -106,6 +110,8 @@ public partial class MainWindow : Window
         LearningEnabledCheckBox.Unchecked += OnLearningEnabledChanged;
         ResetLearningButton.Click += OnResetLearningClicked;
         _reminderTimer.Tick += OnReminderTick;
+        _explorerPathTimer.Tick += OnExplorerPathTimerTick;
+        _undoTimer.Tick += OnUndoTimerTick;
         _reminderTimer.Start();
         _feedback.PlayLaunchSound();
         _closeTimer.Tick += (_, _) => { _closeTimer.Stop(); Hide(); ResetOperation(); };
@@ -414,8 +420,16 @@ public partial class MainWindow : Window
     {
         if (SuggestionList.SelectedItem is not SuggestionOption option) return;
         _proposedFolder = option.FullPath;
-        ProposedPathText.Text = ToOneDriveDisplayPath(option.FullPath);
+        ProposedPathText.Text = ToOneDriveTreeDisplayPath(option.FullPath);
+        var confidenceLevel = option.Score >= 0.70d ? "ÉLEVÉE" : option.Score >= 0.45d ? "MOYENNE" : "FAIBLE";
+        ConfidenceLevelText.Text = confidenceLevel;
+        ConfidenceBadge.Background = confidenceLevel == "ÉLEVÉE"
+            ? System.Windows.Media.Brushes.Honeydew
+            : confidenceLevel == "MOYENNE"
+                ? System.Windows.Media.Brushes.LemonChiffon
+                : System.Windows.Media.Brushes.MistyRose;
         ConfidenceText.Text = $"Confiance {option.Score:P0} — {option.Reason}";
+        CurrentMovePreviewText.Text = $"{Path.GetFileName(_activePath ?? string.Empty)}  →  {ToOneDriveDisplayPath(option.FullPath)}";
         YesButton.IsEnabled = true;
         if (_analysis is not null && _activePath is not null) PrepareRename(_activePath, _analysis, option);
     }
@@ -456,8 +470,10 @@ public partial class MainWindow : Window
         var suggestion = _renameService.Suggest(context);
         var confidence = new SuggestionConfidenceService().Evaluate(option?.Score ?? 0d);
         var decision = _autoRenamePolicy.Decide(suggestion, confidence, userEnabledAutoRename: true);
+        _preparingRename = true;
         RenameTextBox.Text = suggestion.ProposedFileName;
         AutoRenameCheckBox.IsChecked = decision.ShouldApply;
+        _preparingRename = false;
         AutoRenameStatusText.Text = suggestion.Changed
             ? $"Proposition modifiable — {decision.Reason}"
             : "Nom actuel conservé : aucune amélioration fiable.";
@@ -494,19 +510,35 @@ public partial class MainWindow : Window
         _trackedExplorerHwnd = null;
         SuggestionPanel.Visibility = Visibility.Collapsed;
         RenamePanel.Visibility = Visibility.Collapsed;
+        MovePreviewPanel.Visibility = Visibility.Collapsed;
         ExplorerRefinementPanel.Visibility = Visibility.Visible;
         DecisionButtons.Visibility = Visibility.Collapsed;
-        MoveHereButton.Content = "DÉPOSER ICI";
+        BackButton.Visibility = Visibility.Visible;
+        MoveHereButton.Content = "DÉPOSER DANS CE DOSSIER";
         MoveHereButton.IsEnabled = false;
         MoveHereButton.Visibility = Visibility.Visible;
-        TrackedExplorerDestinationText.Text = ToOneDriveDisplayPath(startingFolder);
+        TrackedExplorerDestinationText.Text = ToOneDriveTreeDisplayPath(startingFolder);
+        DestinationReadyText.Text = "● Ouverture de l’Explorateur…";
+        DestinationReadyText.Foreground = System.Windows.Media.Brushes.DarkOrange;
         StatusText.Text = "Source verrouillée. Ouverture de l’Explorateur — aucun déplacement effectué.";
 
         _trackedExplorerHwnd = await OpenExplorerAndTrackAsync(startingFolder);
+        if (_trackedExplorerHwnd is nint explorerHwnd)
+        {
+            ShowWindow(explorerHwnd, ShowWindowMaximized);
+            Topmost = true;
+            Activate();
+            _explorerPathTimer.Start();
+        }
         MoveHereButton.IsEnabled = _trackedExplorerHwnd is not null;
         StatusText.Text = _trackedExplorerHwnd is null
-            ? "Fenêtre Explorateur introuvable. Aucun déplacement effectué."
-            : "Navigue dans cette fenêtre Explorateur, puis clique DÉPOSER ICI.";
+            ? "Explorateur introuvable : utilise RETOUR puis réessaie."
+            : "Choisis le dossier dans l’Explorateur, puis clique DÉPOSER DANS CE DOSSIER.";
+        if (_trackedExplorerHwnd is null)
+        {
+            DestinationReadyText.Text = "● Explorateur introuvable";
+            DestinationReadyText.Foreground = System.Windows.Media.Brushes.Firebrick;
+        }
     }
 
     private async void OnMoveHere(object sender, RoutedEventArgs e)
@@ -563,10 +595,81 @@ public partial class MainWindow : Window
 
     private void OnUserTextChanged(object sender, TextChangedEventArgs e)
     {
+        if (!_preparingRename && !string.IsNullOrWhiteSpace(RenameTextBox.Text))
+        {
+            AutoRenameCheckBox.IsChecked = true;
+            AutoRenameStatusText.Text = "✓ Ton nom personnalisé sera appliqué lors du déplacement.";
+        }
         _isUserTyping = true;
         _lastActivityUtc = DateTime.UtcNow;
         _reminderShown = false;
         _ = Task.Delay(900).ContinueWith(_ => Dispatcher.BeginInvoke(() => _isUserTyping = false));
+    }
+
+    private void OnExplorerPathTimerTick(object? sender, EventArgs e)
+    {
+        if (_trackedExplorerHwnd is not nint explorerHwnd ||
+            !TryGetExplorerPathByHwnd(explorerHwnd, out var destination))
+        {
+            MoveHereButton.IsEnabled = false;
+            DestinationReadyText.Text = "● Explorateur fermé ou inaccessible";
+            DestinationReadyText.Foreground = System.Windows.Media.Brushes.Firebrick;
+            return;
+        }
+
+        var depth = GetDepth(_oneDriveRoot, destination);
+        var valid = Directory.Exists(destination) && IsUnderRoot(destination) && depth is >= 0 and <= MaxDepth;
+        TrackedExplorerDestinationText.Text = ToOneDriveTreeDisplayPath(destination);
+        MoveHereButton.IsEnabled = valid;
+        DestinationReadyText.Text = valid ? "● Destination prête" : "● Choisis un dossier OneDrive de niveau 0 à 4";
+        DestinationReadyText.Foreground = valid ? System.Windows.Media.Brushes.ForestGreen : System.Windows.Media.Brushes.DarkOrange;
+    }
+
+    private void OnUndoTimerTick(object? sender, EventArgs e)
+    {
+        _undoSecondsRemaining--;
+        if (_undoSecondsRemaining <= 0)
+        {
+            _undoTimer.Stop();
+            UndoMoveButton.IsEnabled = false;
+            UndoMoveButton.Content = "DÉLAI D’ANNULATION TERMINÉ";
+            return;
+        }
+
+        UndoMoveButton.Content = $"ANNULER LE DÉPLACEMENT ({_undoSecondsRemaining} s)";
+    }
+
+    private void OnBack(object sender, RoutedEventArgs e)
+    {
+        if (_pendingMove is not null) return;
+        _explorerPathTimer.Stop();
+        _trackedExplorerHwnd = null;
+        _lockedSourcePath = null;
+        ExplorerRefinementPanel.Visibility = Visibility.Collapsed;
+        MoveHereButton.Visibility = Visibility.Collapsed;
+        SuggestionPanel.Visibility = Visibility.Visible;
+        RenamePanel.Visibility = Directory.Exists(_activePath ?? string.Empty) ? Visibility.Collapsed : Visibility.Visible;
+        MovePreviewPanel.Visibility = Visibility.Visible;
+        DecisionButtons.Visibility = Visibility.Visible;
+        BackButton.Visibility = Visibility.Collapsed;
+        StatusText.Text = "Retour à la proposition. Aucun déplacement effectué.";
+    }
+
+    private void OnWindowPreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Escape)
+        {
+            if (ExplorerRefinementPanel.Visibility == Visibility.Visible) OnBack(sender, e);
+            else OnCancel(sender, e);
+            e.Handled = true;
+            return;
+        }
+
+        if (e.Key == Key.Enter && MoveHereButton.Visibility == Visibility.Visible && MoveHereButton.IsEnabled)
+        {
+            OnMoveHere(sender, e);
+            e.Handled = true;
+        }
     }
 
     private void OnLearningEnabledChanged(object sender, RoutedEventArgs e)
@@ -683,6 +786,12 @@ public partial class MainWindow : Window
             MoveHereButton.Visibility = Visibility.Collapsed;
             RenamePanel.Visibility = Visibility.Collapsed;
             PostMovePanel.Visibility = Visibility.Visible;
+            BackButton.Visibility = Visibility.Collapsed;
+            _explorerPathTimer.Stop();
+            _undoSecondsRemaining = 10;
+            UndoMoveButton.Content = "ANNULER LE DÉPLACEMENT (10 s)";
+            UndoMoveButton.IsEnabled = true;
+            _undoTimer.Start();
             StatusText.Text = "Déplacement vérifié. Confirme maintenant le classement.";
         }
         catch (Exception ex)
@@ -695,6 +804,7 @@ public partial class MainWindow : Window
     private void OnClassificationConfirmed(object sender, RoutedEventArgs e)
     {
         if (_pendingMove is null) return;
+        _undoTimer.Stop();
         ApplyConfirmedLearning(_pendingMove.Destination);
         SaveLastMove(_pendingMove, "CONFIRMED");
         _pendingMove = null;
@@ -706,6 +816,7 @@ public partial class MainWindow : Window
     private async void OnClassificationRejected(object sender, RoutedEventArgs e)
     {
         if (_pendingMove is null) return;
+        _undoTimer.Stop();
         var move = _pendingMove;
         IsEnabled = false;
         StatusText.Text = "Restauration du fichier avant correction…";
@@ -999,6 +1110,9 @@ public partial class MainWindow : Window
     {
         var health = documentTokens.Contains("santé") || documentTokens.Contains("sante");
         var healthFolder = folderTokens.Contains("santé") || folderTokens.Contains("sante");
+        var fiscal = documentTokens.Overlaps(new[] { "impot", "impôts", "impots", "fiscal", "fiscale", "revenu", "revenus" });
+        var fiscalFolder = folderTokens.Overlaps(new[] { "impot", "impôts", "impots", "fiscal", "finances" });
+        if (fiscal && fiscalFolder) return 0.32d;
         return health && healthFolder ? 0.25d : 0d;
     }
 
@@ -1017,6 +1131,19 @@ public partial class MainWindow : Window
             tokens.Add("sante");
             tokens.Add("médical");
             tokens.Add("medical");
+        }
+
+        var fiscalTerms = new HashSet<string>(
+            new[] { "impot", "impôts", "impots", "fiscal", "fiscale", "fiscaux", "revenu", "revenus", "imposition" },
+            StringComparer.OrdinalIgnoreCase);
+        if (tokens.Overlaps(fiscalTerms))
+        {
+            tokens.Add("impôt");
+            tokens.Add("impot");
+            tokens.Add("impôts");
+            tokens.Add("impots");
+            tokens.Add("fiscal");
+            tokens.Add("finances");
         }
     }
 
@@ -1238,8 +1365,8 @@ public partial class MainWindow : Window
         var maxWidthDip = Math.Max(MinWidth, workWidthDip - preferredRightGapDip - 24);
         var maxHeightDip = Math.Max(MinHeight, workHeightDip - 16);
 
-        Width = Math.Min(maxWidthDip, Math.Max(620, workWidthDip * .38));
-        Height = Math.Min(maxHeightDip, Math.Max(560, workHeightDip * .78));
+        Width = Math.Min(maxWidthDip, Math.Max(520, workWidthDip * .323));
+        Height = Math.Min(maxHeightDip, Math.Max(476, workHeightDip * .663));
 
         var widthPixels = (int)Math.Round(Width * monitor.ScaleX);
         var heightPixels = (int)Math.Round(Height * monitor.ScaleY);
@@ -1325,19 +1452,43 @@ public partial class MainWindow : Window
         return "OneDrive › " + string.Join(" › ", segments);
     }
 
+    private string ToOneDriveTreeDisplayPath(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || !IsUnderRoot(path))
+            return Path.GetFileName(path);
+
+        var relative = Path.GetRelativePath(_oneDriveRoot, path);
+        if (string.IsNullOrWhiteSpace(relative) || relative == ".")
+            return "📁 OneDrive";
+
+        var segments = relative.Split(
+            new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar },
+            StringSplitOptions.RemoveEmptyEntries);
+        var lines = new List<string> { "📁 OneDrive" };
+        for (var index = 0; index < segments.Length; index++)
+        {
+            var prefix = new string('　', index + 1) + (index == segments.Length - 1 ? "└ 🎯 " : "└ 📁 ");
+            lines.Add(prefix + segments[index]);
+        }
+        return string.Join(Environment.NewLine, lines);
+    }
+
     private void ResetOperation()
     {
         _closeTimer.Stop();
+        _explorerPathTimer.Stop();
+        _undoTimer.Stop();
         _explorerOpenRequestId++;
         _activePath = null; _proposedFolder = null; _analysis = null; _pendingMove = null; _busy = false;
         _decisionPath = DecisionPath.None; _initialSuggestedFolder = null; _lockedSourcePath = null; _trackedExplorerHwnd = null;
         _rejectedDestinations.Clear(); _learningCommitted = false; _moveInProgress = false;
-        _suggestions.Clear(); SuggestionList.ItemsSource = null; Height = 690;
+        _suggestions.Clear(); SuggestionList.ItemsSource = null; Height = 586;
         ItemNameText.Text = "En attente d’un clic molette…"; ProposedPathText.Text = "—"; ConfidenceText.Text = "";
         TrackedExplorerDestinationText.Text = "Ouverture de l’Explorateur…";
         RenameTextBox.Text = ""; AutoRenameStatusText.Text = ""; AutoRenameCheckBox.IsChecked = false;
         ExplorerRefinementPanel.Visibility = Visibility.Collapsed; PostMovePanel.Visibility = Visibility.Collapsed;
-        SuggestionPanel.Visibility = Visibility.Visible;
+        SuggestionPanel.Visibility = Visibility.Visible; MovePreviewPanel.Visibility = Visibility.Visible;
+        BackButton.Visibility = Visibility.Collapsed;
         DecisionButtons.Visibility = Visibility.Visible; MoveHereButton.Visibility = Visibility.Collapsed; RenamePanel.Visibility = Visibility.Visible;
         MoveHereButton.IsEnabled = false; YesButton.IsEnabled = false; NoButton.IsEnabled = false; IsEnabled = true;
     }
@@ -1362,6 +1513,7 @@ public partial class MainWindow : Window
 
     private const uint MonitorDefaultToNearest = 2;
     private const int MonitorDpiTypeEffective = 0;
+    private const int ShowWindowMaximized = 3;
 
     [StructLayout(LayoutKind.Sequential)]
     private struct NativePoint
@@ -1405,6 +1557,10 @@ public partial class MainWindow : Window
         int dpiType,
         out uint dpiX,
         out uint dpiY);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool ShowWindow(nint window, int command);
 
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
