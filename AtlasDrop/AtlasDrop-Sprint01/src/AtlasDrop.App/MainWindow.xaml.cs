@@ -798,22 +798,43 @@ public partial class MainWindow : Window
 
     private async void OnExplainChoiceClicked(object sender, RoutedEventArgs e)
     {
-        if (_pendingMove is null || _voiceService is null) return;
-
         VoiceRulePanel.Visibility = Visibility.Visible;
+        VoiceTranscriptText.Text = string.Empty;
+        VoiceRulePreviewText.Text = string.Empty;
+
+        if (_pendingMove is null)
+        {
+            VoiceStatusText.Text = "Le classement doit d’abord être déplacé avant d’expliquer ton choix.";
+            StatusText.Text = "Aucun déplacement en attente : le microphone n’a pas démarré.";
+            return;
+        }
+
+        if (_voiceService is null)
+        {
+            VoiceStatusText.Text = "Module vocal indisponible. Relance Atlas Drop puis réessaie.";
+            return;
+        }
+
         if (!_voiceService.IsRecording)
         {
+            VoiceStatusText.Text = "Activation du microphone…";
+            ExplainChoiceButton.Content = "ACTIVATION…";
+            ExplainChoiceButton.IsEnabled = false;
+            await Dispatcher.Yield(DispatcherPriority.Render);
             try
             {
                 _voiceService.StartRecording();
                 ExplainChoiceButton.Content = "■ ARRÊTER ET ANALYSER";
                 VoiceStatusText.Text = "🎤 Je t’écoute. Explique simplement pourquoi ce fichier va dans ce dossier.";
-                VoiceTranscriptText.Text = string.Empty;
-                VoiceRulePreviewText.Text = string.Empty;
             }
             catch (Exception ex)
             {
+                ExplainChoiceButton.Content = "🎤 EXPLIQUER MON CHOIX";
                 VoiceStatusText.Text = "Microphone indisponible : vérifie l’autorisation Microphone de Windows. " + ex.Message;
+            }
+            finally
+            {
+                ExplainChoiceButton.IsEnabled = true;
             }
             return;
         }
