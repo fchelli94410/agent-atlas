@@ -199,7 +199,7 @@ public partial class MainWindow : Window
         await AnalyzeActiveFileAsync();
         await LoadAutomaticFolderCandidatesAsync();
         if (_analysis is null) return;
-        _suggestions = BuildSuggestions(_analysis);
+        _suggestions = await Task.Run(() => BuildSuggestions(_analysis));
         SuggestionList.ItemsSource = _suggestions;
         SuggestionList.SelectedIndex = _suggestions.Count > 0 ? 0 : -1;
         YesButton.IsEnabled = _suggestions.Count > 0;
@@ -226,8 +226,8 @@ public partial class MainWindow : Window
         {
             _folders = await Task.Run(BuildIndex);
             SaveIndex(_folders);
-            _analysis = await AnalyzeItemAsync(_activePath);
-            _suggestions = BuildSuggestions(_analysis);
+            _analysis = await Task.Run(() => AnalyzeItemAsync(_activePath));
+            _suggestions = await Task.Run(() => BuildSuggestions(_analysis));
             SuggestionList.ItemsSource = _suggestions;
             SuggestionList.SelectedIndex = _suggestions.Count > 0 ? 0 : -1;
             YesButton.IsEnabled = _suggestions.Count > 0;
@@ -256,7 +256,8 @@ public partial class MainWindow : Window
     private async Task AnalyzeActiveFileAsync()
     {
         if (_activePath is null) return;
-        _analysis = await AnalyzeItemAsync(_activePath);
+        var path = _activePath;
+        _analysis = await Task.Run(() => AnalyzeItemAsync(path));
     }
 
     private async Task LoadAutomaticFolderCandidatesAsync()
@@ -339,12 +340,13 @@ public partial class MainWindow : Window
             analysis.Years,
             string.Join('|', analysis.Tokens.Take(8)));
 
+        var candidateFolders = GetRelevantFolderCandidates(analysis);
         var tokenDocumentFrequency = analysis.Tokens.ToDictionary(
             token => token,
-            token => _folders.Count(folder => folder.Tokens.Contains(token)),
+            token => candidateFolders.Count(folder => folder.Tokens.Contains(token)),
             StringComparer.OrdinalIgnoreCase);
 
-        var ranked = _folders
+        var ranked = candidateFolders
             .Select(folder =>
             {
                 var relative = Path.GetRelativePath(_oneDriveRoot, folder.Path);
@@ -373,7 +375,7 @@ public partial class MainWindow : Window
                     analysis.Tokens,
                     folder.Tokens,
                     tokenDocumentFrequency,
-                    _folders.Count);
+                    candidateFolders.Count);
                 var hierarchyBoost = GetHierarchyBoost(relative, analysis.Tokens);
                 var score = Math.Clamp(
                     scored.Score + learned * 0.03 + thematicBoost + distinctiveBoost + hierarchyBoost,
@@ -410,6 +412,21 @@ public partial class MainWindow : Window
         {
             top with { Score = calibratedConfidence }
         };
+    }
+
+    private IReadOnlyList<FolderEntry> GetRelevantFolderCandidates(AnalysisSnapshot analysis)
+    {
+        if (_folders.Count <= 250)
+            return _folders;
+
+        var relevant = _folders
+            .Where(folder =>
+                folder.Depth == 1 ||
+                folder.Tokens.Overlaps(analysis.Tokens) ||
+                analysis.Years.Any(year => folder.Tokens.Contains(year.ToString())))
+            .ToList();
+
+        return relevant.Count >= 20 ? relevant : _folders;
     }
 
     private static double GetDistinctiveTokenBoost(
@@ -496,6 +513,7 @@ public partial class MainWindow : Window
         {
             [_oneDriveRoot] = rootItem
         };
+        TreeViewItem? proposedNode = null;
         foreach (var folder in folders.OrderBy(folder => folder.Depth).ThenBy(folder => folder.Path, StringComparer.OrdinalIgnoreCase))
         {
             var parentPath = Path.GetDirectoryName(folder.Path) ?? _oneDriveRoot;
@@ -505,6 +523,19 @@ public partial class MainWindow : Window
                 IsSameOrChild(proposedFolder, folder.Path);
             parent.Items.Add(node);
             nodes[folder.Path] = node;
+            if (PathsEqualSafe(folder.Path, proposedFolder)) proposedNode = node;
+        }
+
+        if (proposedNode is not null)
+        {
+            Dispatcher.BeginInvoke(
+                DispatcherPriority.Loaded,
+                () =>
+                {
+                    proposedNode.BringIntoView();
+                    MainContentScrollViewer.ScrollToVerticalOffset(
+                        Math.Max(0, MainContentScrollViewer.VerticalOffset - 60));
+                });
         }
     }
 
