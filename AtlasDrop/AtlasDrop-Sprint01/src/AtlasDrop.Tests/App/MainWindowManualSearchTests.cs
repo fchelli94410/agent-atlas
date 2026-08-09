@@ -277,7 +277,8 @@ public sealed class MainWindowExplorerRefinementTests
     {
         var code = ReadCode();
 
-        Assert.Contains("AutoRenameCheckBox.IsChecked = true", code, StringComparison.Ordinal);
+        Assert.Contains("AutoRenameCheckBox.IsChecked = false", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("AutoRenameCheckBox.IsChecked = true", code, StringComparison.Ordinal);
         Assert.Contains("OnManageLearningClicked", code, StringComparison.Ordinal);
         Assert.Contains("SUPPRIMER LA SÉLECTION", code, StringComparison.Ordinal);
         Assert.Contains("SaveLearningDictionary()", code, StringComparison.Ordinal);
@@ -328,6 +329,42 @@ public sealed class MainWindowExplorerRefinementTests
         Assert.Contains("x:Name=\"ExplainChoiceButton\"", xaml, StringComparison.Ordinal);
         Assert.Contains("ExplainChoiceButton.IsEnabled = true", code, StringComparison.Ordinal);
         Assert.Contains("ExplainChoiceButton.IsEnabled = false", code, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Refresh_rebuilds_the_index_and_recalculates_the_suggestion_without_moving()
+    {
+        var code = ReadCode();
+        var xaml = File.ReadAllText(FindFile("MainWindow.xaml"));
+        var refresh = MethodBlock(
+            code,
+            "private async void OnRefreshSuggestionClicked",
+            "private async Task AnalyzeActiveFileAsync");
+
+        Assert.Contains("x:Name=\"RefreshSuggestionButton\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("_folders = await Task.Run(BuildIndex)", refresh, StringComparison.Ordinal);
+        Assert.Contains("_suggestions = BuildSuggestions(_analysis)", refresh, StringComparison.Ordinal);
+        Assert.DoesNotContain("MoveAsync", refresh, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Closing_keeps_the_moved_file_but_skips_unconfirmed_learning()
+    {
+        var code = ReadCode();
+
+        Assert.Contains("CLOSED_WITHOUT_CONFIRMATION", code, StringComparison.Ordinal);
+        Assert.Contains("_pendingMove = null", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("Réponds à la question de conformité avant de fermer.", code, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Direct_tree_move_waits_for_maximized_explorer_and_shows_confirmation()
+    {
+        var code = ReadCode();
+
+        Assert.Contains("await OpenDestinationBehindAsync(destination)", code, StringComparison.Ordinal);
+        Assert.Contains("PostMovePanel.BringIntoView()", code, StringComparison.Ordinal);
+        Assert.Contains("MainContentScrollViewer.ScrollToEnd()", code, StringComparison.Ordinal);
     }
 
 }
