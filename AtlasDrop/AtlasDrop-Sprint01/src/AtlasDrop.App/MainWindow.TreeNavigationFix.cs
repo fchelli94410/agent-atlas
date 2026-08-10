@@ -17,11 +17,15 @@ public partial class MainWindow
         if (FindAncestor<ToggleButton>(e.OriginalSource as DependencyObject) is not null)
             return;
 
-        var treeItem = FindAncestor<TreeViewItem>(e.OriginalSource as DependencyObject);
+        var treeItem = FindAncestor<TreeViewItem>(e.OriginalSource as DependencyObject)
+            ?? FindAncestor<TreeViewItem>(e.Source as DependencyObject);
         if (treeItem?.Tag is not string destination || string.IsNullOrWhiteSpace(destination))
             return;
 
         e.Handled = true;
+        treeItem.IsSelected = true;
+        treeItem.Focus();
+        treeItem.BringIntoView();
 
         if (!Directory.Exists(destination) || !IsUnderRoot(destination))
         {
