@@ -44,6 +44,15 @@ public sealed class FolderScoringService : IFolderScoringService
         ArgumentNullException.ThrowIfNull(folder);
         ArgumentNullException.ThrowIfNull(context);
 
+        if (ContainsArchiveSegment(folder.FullPath) || ContainsArchiveSegment(folder.Name))
+        {
+            return new FolderScoreResult(
+                folder,
+                0d,
+                new[] { "dossier archive exclu de toute recherche automatique" },
+                _confidenceService.Evaluate(0d));
+        }
+
         if (folder.IsExcluded)
         {
             return new FolderScoreResult(
@@ -214,7 +223,6 @@ public sealed class FolderScoringService : IFolderScoringService
         if (folder.QualityScore >= 0.75)
             reasons.Add("bonne qualité de dossier");
 
-        // Pénalités V1 : profondeur, faible qualité et noms trop génériques.
         if (folder.Depth >= _maxSuggestedDepth)
         {
             score -= 0.05;
@@ -292,6 +300,15 @@ public sealed class FolderScoringService : IFolderScoringService
                haystack.Contains(
                    needle,
                    StringComparison.Ordinal);
+    }
+
+    private static bool ContainsArchiveSegment(string path)
+    {
+        return path
+            .Split(
+                new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar },
+                StringSplitOptions.RemoveEmptyEntries)
+            .Any(segment => segment.Contains("archive", StringComparison.OrdinalIgnoreCase));
     }
 
     private static bool IsGenericName(string normalizedName)

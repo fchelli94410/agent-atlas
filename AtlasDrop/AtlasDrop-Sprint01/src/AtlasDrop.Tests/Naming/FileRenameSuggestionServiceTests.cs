@@ -10,7 +10,7 @@ public sealed class FileRenameSuggestionServiceTests
     private static FileRenameSuggestionService Service() => new();
 
     [Fact]
-    public void Exact_date_uses_full_iso_date()
+    public void Generic_scan_can_use_reliable_full_date_and_metadata()
     {
         var result = Service().Suggest(
             new FileRenameContext(
@@ -30,7 +30,7 @@ public sealed class FileRenameSuggestionServiceTests
     }
 
     [Fact]
-    public void Month_precision_never_invents_day()
+    public void Generic_scan_month_precision_never_invents_day()
     {
         var result = Service().Suggest(
             new FileRenameContext(
@@ -44,17 +44,12 @@ public sealed class FileRenameSuggestionServiceTests
                 null,
                 null));
 
-        Assert.StartsWith(
-            "2026-08 - Facture",
-            result.ProposedFileName);
-
-        Assert.DoesNotContain(
-            "2026-08-01",
-            result.ProposedFileName);
+        Assert.StartsWith("2026-08 - Facture", result.ProposedFileName);
+        Assert.DoesNotContain("2026-08-01", result.ProposedFileName);
     }
 
     [Fact]
-    public void Year_precision_never_invents_month()
+    public void Generic_scan_year_precision_never_invents_month()
     {
         var result = Service().Suggest(
             new FileRenameContext(
@@ -68,9 +63,7 @@ public sealed class FileRenameSuggestionServiceTests
                 null,
                 null));
 
-        Assert.StartsWith(
-            "2026 - Contrat",
-            result.ProposedFileName);
+        Assert.StartsWith("2026 - Contrat", result.ProposedFileName);
     }
 
     [Fact]
@@ -92,7 +85,7 @@ public sealed class FileRenameSuggestionServiceTests
     }
 
     [Fact]
-    public void Invalid_windows_characters_are_cleaned()
+    public void Invalid_windows_characters_are_cleaned_for_generic_source()
     {
         var result = Service().Suggest(
             new FileRenameContext(
@@ -111,7 +104,7 @@ public sealed class FileRenameSuggestionServiceTests
     }
 
     [Fact]
-    public void Detail_has_priority_over_company_and_reference()
+    public void Detail_has_priority_over_company_and_reference_for_generic_source()
     {
         var result = Service().Suggest(
             new FileRenameContext(
@@ -125,13 +118,8 @@ public sealed class FileRenameSuggestionServiceTests
                 "Abonnement électricité",
                 "FAC-123"));
 
-        Assert.Contains(
-            "Abonnement électricité",
-            result.ProposedFileName);
-
-        Assert.DoesNotContain(
-            "FAC-123",
-            result.ProposedFileName);
+        Assert.Contains("Abonnement électricité", result.ProposedFileName);
+        Assert.DoesNotContain("FAC-123", result.ProposedFileName);
     }
 
     [Fact]
@@ -150,9 +138,73 @@ public sealed class FileRenameSuggestionServiceTests
                 null));
 
         Assert.True(result.Changed);
-        Assert.Contains(
-            "nom source peu informatif remplacé",
-            result.Reasons);
+        Assert.Contains("nom source peu informatif remplacé", result.Reasons);
+    }
+
+    [Fact]
+    public void Meaningful_attestation_name_never_receives_ocr_date_or_words()
+    {
+        var result = Service().Suggest(
+            new FileRenameContext(
+                "attestation.pdf",
+                DocumentType.Contract,
+                new DateTime(2024, 12, 31),
+                2024,
+                12,
+                "Montreuil CedexNous contacterCourriel",
+                "ARESIA-Valenton",
+                "Contrat",
+                "1945"));
+
+        Assert.Equal("attestation.pdf", result.ProposedFileName);
+        Assert.DoesNotContain("2024", result.ProposedFileName);
+        Assert.DoesNotContain("Contrat", result.ProposedFileName, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Montreuil", result.ProposedFileName, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Courriel", result.ProposedFileName, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("ARESIA", result.ProposedFileName, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Meaningful_human_name_is_preserved_even_when_ocr_detects_noise()
+    {
+        var result = Service().Suggest(
+            new FileRenameContext(
+                "certificat travail stefy Gamby.pdf",
+                DocumentType.Contract,
+                new DateTime(1945, 5, 8),
+                1945,
+                5,
+                "BRUNOY Nous contacter Courriel",
+                "ARESIA-Valenton",
+                null,
+                null));
+
+        Assert.Equal("certificat travail stefy Gamby.pdf", result.ProposedFileName);
+        Assert.DoesNotContain("1945", result.ProposedFileName);
+        Assert.DoesNotContain("BRUNOY", result.ProposedFileName, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("ARESIA", result.ProposedFileName, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Existing_meaningful_name_with_date_is_preserved_as_written()
+    {
+        var result = Service().Suggest(
+            new FileRenameContext(
+                "2021-04-09 - AXA - contrat habitation.pdf",
+                DocumentType.Contract,
+                new DateTime(2021, 4, 9),
+                2021,
+                4,
+                "COURBEVOIEType de bien",
+                "FRANCK CHELLI144 A",
+                null,
+                null));
+
+        Assert.Equal(
+            "2021-04-09 - AXA - contrat habitation.pdf",
+            result.ProposedFileName);
+        Assert.DoesNotContain("COURBEVOIE", result.ProposedFileName, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("FRANCK CHELLI", result.ProposedFileName, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -170,13 +222,11 @@ public sealed class FileRenameSuggestionServiceTests
                 null,
                 null));
 
-        Assert.Equal(
-            "mon fichier.txt",
-            result.ProposedFileName);
+        Assert.Equal("mon fichier.txt", result.ProposedFileName);
     }
 
     [Fact]
-    public void Proposed_name_is_limited_in_length()
+    public void Proposed_name_is_limited_in_length_for_generic_source()
     {
         var result = Service().Suggest(
             new FileRenameContext(
@@ -191,30 +241,6 @@ public sealed class FileRenameSuggestionServiceTests
                 null));
 
         Assert.True(
-            Path.GetFileNameWithoutExtension(
-                result.ProposedFileName).Length <= 150);
+            Path.GetFileNameWithoutExtension(result.ProposedFileName).Length <= 150);
     }
-    [Fact]
-    public void Reliable_original_name_words_are_prioritized_before_ocr_metadata()
-    {
-        var result = Service().Suggest(
-            new FileRenameContext(
-                "2021-04-09 - AXA - contrat habitation.pdf",
-                DocumentType.Contract,
-                new DateTime(2021, 4, 9),
-                null,
-                null,
-                "COURBEVOIEType de bien",
-                "FRANCK CHELLI144 A",
-                null,
-                null));
-
-        Assert.StartsWith(
-            "2021-04-09 - AXA habitation - Contrat",
-            result.ProposedFileName);
-        Assert.Contains(
-            "mots fiables du nom source prioritaires",
-            result.Reasons);
-    }
-
 }

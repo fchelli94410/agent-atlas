@@ -4,6 +4,8 @@
     <UseWPF>true</UseWPF>
     <AssemblyName>AtlasDrop.App</AssemblyName>
     <RootNamespace>AtlasDrop.App</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Version>1.1.7</Version>
   </PropertyGroup>
 
   <ItemGroup>
