@@ -122,14 +122,19 @@ internal sealed class ExplorerMiddleClickActivation : IDisposable
                 new System.Windows.Point(point.X, point.Y));
 
             var itemElement = FindExplorerItem(elementAtPoint);
-            // Desktop icons do not expose exactly the same UI Automation tree
-            // on every Windows 11 build.  When no ListItem ancestor is exposed,
-            // the element directly under the pointer still carries the label.
-            var names = GetCandidateNames(itemElement ?? elementAtPoint)
-                .Concat(GetNamesFromItemsAtPoint(window, point))
+            // Prefer the direct automation ancestry first. The full descendant
+            // scan is substantially slower, so use it only as a fallback for
+            // Windows/desktop variants that do not expose the item directly.
+            var directNames = GetCandidateNames(itemElement ?? elementAtPoint)
                 .SelectMany(GetNameVariants)
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToArray();
+            var names = directNames.Length > 0
+                ? directNames
+                : GetNamesFromItemsAtPoint(window, point)
+                    .SelectMany(GetNameVariants)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToArray();
             if (names.Length == 0)
                 return null;
 
