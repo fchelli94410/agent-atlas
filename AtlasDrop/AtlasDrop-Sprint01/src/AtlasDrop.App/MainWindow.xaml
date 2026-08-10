@@ -334,18 +334,24 @@
                     MinHeight="28" Padding="8,4" Margin="0,3,0,0"
                     FontSize="11" Click="OnBack"/>
 
-            <StackPanel x:Name="LearningControlsPanel" Margin="0,1,0,0" VerticalAlignment="Bottom">
-                <CheckBox x:Name="LearningEnabledCheckBox" Content="Apprentissage activé"
-                          IsChecked="True" HorizontalAlignment="Left" FontSize="12" Margin="0,0,0,1"/>
-                <WrapPanel HorizontalAlignment="Right" Margin="0">
-                    <Button x:Name="HistoryButton" Content="HISTORIQUE" MinHeight="28"
-                            Padding="7,2" Margin="2,1,0,0" FontSize="11" Click="OnHistoryClicked"/>
-                    <Button x:Name="ManageLearningButton" Content="GÉRER APPRENTISSAGE"
-                            MinHeight="28" Padding="7,2" Margin="2,1,0,0" FontSize="11" Click="OnManageLearningClicked"/>
-                    <Button x:Name="ResetLearningButton" Content="TOUT EFFACER"
-                            MinHeight="28" Padding="7,2" Margin="2,1,0,0" FontSize="11"/>
-                </WrapPanel>
-            </StackPanel>
+            <Grid x:Name="LearningControlsPanel" Margin="0,2,0,0" VerticalAlignment="Bottom">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <CheckBox x:Name="LearningEnabledCheckBox" Grid.Column="0" Content="Apprentissage activé"
+                          IsChecked="True" VerticalAlignment="Center" FontSize="12.5" FontWeight="SemiBold"
+                          Margin="0,0,6,0"/>
+                <Button x:Name="HistoryButton" Grid.Column="2" Content="HISTORIQUE" MinHeight="28"
+                        Padding="6,2" Margin="2,0" FontSize="10.5" Click="OnHistoryClicked"/>
+                <Button x:Name="ManageLearningButton" Grid.Column="3" Content="GÉRER APPRENTISSAGE"
+                        MinHeight="28" Padding="6,2" Margin="2,0" FontSize="10.5" Click="OnManageLearningClicked"/>
+                <Button x:Name="ResetLearningButton" Grid.Column="4" Content="TOUT EFFACER"
+                        MinHeight="28" Padding="6,2" Margin="2,0,0,0" FontSize="10.5"/>
+            </Grid>
         </StackPanel>
     </Grid>
 </Window>
