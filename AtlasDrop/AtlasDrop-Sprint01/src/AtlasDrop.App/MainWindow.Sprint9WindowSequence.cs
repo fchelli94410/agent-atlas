@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Windows;
 
@@ -44,8 +45,23 @@ public partial class MainWindow
             Topmost = false;
             Hide();
 
+            var expectedFolder = _decisionPath == DecisionPath.WrongFolder
+                ? _oneDriveRoot
+                : _proposedFolder;
+
             for (var attempt = 0; attempt < 80 && _trackedExplorerHwnd is null; attempt++)
-                await Task.Delay(25);
+            {
+                if (!string.IsNullOrWhiteSpace(expectedFolder))
+                {
+                    var match = ReadExplorerWindows()
+                        .FirstOrDefault(item => PathsEqualSafe(item.Path, expectedFolder));
+                    if (match is not null)
+                        _trackedExplorerHwnd = match.Hwnd;
+                }
+
+                if (_trackedExplorerHwnd is null)
+                    await Task.Delay(25);
+            }
 
             if (_trackedExplorerHwnd is nint hwnd)
             {
@@ -78,7 +94,7 @@ public partial class MainWindow
 
     private async Task ShowExplorerThenReturnAtlasAsync(string destination)
     {
-        var explorer = await OpenExplorerAndTrackAsync(destination);
+        var explorer = await OpenExplorerFastAsync(destination);
         if (explorer is not nint hwnd) return;
 
         Dispatcher.Invoke(() => Topmost = false);
@@ -93,6 +109,30 @@ public partial class MainWindow
             Topmost = true;
             Activate();
         });
+    }
+
+    private async Task<nint?> OpenExplorerFastAsync(string destination)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo("explorer.exe", $"/n,\"{destination}\"") { UseShellExecute = true });
+        }
+        catch
+        {
+            return null;
+        }
+
+        for (var attempt = 0; attempt < 80; attempt++)
+        {
+            var match = ReadExplorerWindows()
+                .FirstOrDefault(item => PathsEqualSafe(item.Path, destination));
+            if (match is not null)
+                return match.Hwnd;
+
+            await Task.Delay(25);
+        }
+
+        return null;
     }
 
     [DllImport("user32.dll", EntryPoint = "SetForegroundWindow")]
