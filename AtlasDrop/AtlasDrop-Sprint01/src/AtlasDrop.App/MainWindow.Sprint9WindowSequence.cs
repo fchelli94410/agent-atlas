@@ -18,6 +18,7 @@ public partial class MainWindow
 
         SuggestionPanel.MinHeight = 0;
         MainContentScrollViewer.MinHeight = 0;
+        _explorerPathTimer.Interval = TimeSpan.FromMilliseconds(120);
 
         if (!_explorerRefinementOrderHandlerAttached)
         {
