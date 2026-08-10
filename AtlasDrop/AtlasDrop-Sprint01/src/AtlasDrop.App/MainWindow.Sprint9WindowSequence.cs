@@ -10,6 +10,13 @@ public partial class MainWindow
     protected override void OnContentRendered(EventArgs e)
     {
         base.OnContentRendered(e);
+
+        if (SuggestionPanel.Parent is System.Windows.Controls.Grid contentGrid && contentGrid.RowDefinitions.Count >= 2)
+            contentGrid.RowDefinitions[0].MinHeight = 0;
+
+        SuggestionPanel.MinHeight = 0;
+        MainContentScrollViewer.MinHeight = 220;
+
         if (_sprint9YesHandlerAttached) return;
 
         YesButton.Click -= OnYes;
