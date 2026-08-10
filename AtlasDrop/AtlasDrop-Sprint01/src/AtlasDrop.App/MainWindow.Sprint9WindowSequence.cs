@@ -15,7 +15,7 @@ public partial class MainWindow
             contentGrid.RowDefinitions[0].MinHeight = 0;
 
         SuggestionPanel.MinHeight = 0;
-        MainContentScrollViewer.MinHeight = 220;
+        MainContentScrollViewer.MinHeight = 0;
 
         if (_sprint9YesHandlerAttached) return;
 
