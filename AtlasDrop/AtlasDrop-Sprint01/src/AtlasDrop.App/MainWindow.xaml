@@ -330,8 +330,8 @@
             </Border>
 
             <Button x:Name="BackButton" Content="←  RETOUR"
-                    Visibility="Collapsed" HorizontalAlignment="Left"
-                    MinHeight="28" Padding="8,4" Margin="0,3,0,0"
+                    Visibility="Collapsed" HorizontalAlignment="Left" VerticalAlignment="Bottom"
+                    MinWidth="92" MinHeight="28" Padding="8,4" Margin="3,2,0,2"
                     FontSize="11" Click="OnBack"/>
 
             <Grid x:Name="LearningControlsPanel" Margin="0,2,0,0" VerticalAlignment="Bottom">
