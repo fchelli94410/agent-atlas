@@ -43,14 +43,15 @@ public partial class MainWindow
             Topmost = false;
             Hide();
 
-            for (var attempt = 0; attempt < 40 && _trackedExplorerHwnd is null; attempt++)
-                await Task.Delay(50);
+            for (var attempt = 0; attempt < 80 && _trackedExplorerHwnd is null; attempt++)
+                await Task.Delay(25);
 
             if (_trackedExplorerHwnd is nint hwnd)
             {
                 ShowWindow(hwnd, ShowWindowMaximized);
                 SetForegroundWindowForSprint9(hwnd);
-                await Task.Delay(180);
+                DwmFlush();
+                await Task.Delay(40);
             }
 
             Show();
@@ -82,8 +83,8 @@ public partial class MainWindow
         Dispatcher.Invoke(() => Topmost = false);
         ShowWindow(hwnd, ShowWindowMaximized);
         SetForegroundWindowForSprint9(hwnd);
-
-        await Task.Delay(650);
+        DwmFlush();
+        await Task.Delay(40);
 
         Dispatcher.Invoke(() =>
         {
@@ -96,4 +97,7 @@ public partial class MainWindow
     [DllImport("user32.dll", EntryPoint = "SetForegroundWindow")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool SetForegroundWindowForSprint9(nint hWnd);
+
+    [DllImport("dwmapi.dll")]
+    private static extern int DwmFlush();
 }
